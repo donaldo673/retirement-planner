@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "deploy": "wrangler deploy",
     "lint": "eslint",
     "test": "tsc -p tsconfig.test.json && node --test .next/test-build/lib/calculations/retirement-engine.test.js .next/test-build/lib/calculations/uk-tax.test.js"
   },
@@ -25,6 +26,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
     "tailwindcss": "4.3.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.166.0"
   }
 }
