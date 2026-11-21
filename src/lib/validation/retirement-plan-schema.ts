@@ -34,6 +34,7 @@ export const retirementPlanSchema = z
       }),
       gia: z.object({
         currentValue: moneySchema,
+        costBasis: moneySchema,
         monthlyContribution: moneySchema,
       }),
       cash: z.object({ currentValue: moneySchema }),
@@ -51,6 +52,12 @@ export const retirementPlanSchema = z
         annualSalaryGrowthRate: rateSchema,
         workUntilAge: ageSchema,
       }),
+      secondEmployment: z.object({
+        currentSalary: moneySchema,
+        annualSalaryGrowthRate: rateSchema,
+        startAge: ageSchema,
+        endAge: ageSchema,
+      }),
       otherIncome: z.object({
         rentalIncome: moneySchema,
         otherIncome: moneySchema,
@@ -59,11 +66,21 @@ export const retirementPlanSchema = z
     }),
     spending: z.object({ buckets: z.array(spendingBucketSchema) }),
     assumptions: z.object({
-      isaReturn: rateSchema,
-      pensionReturn: rateSchema,
-      giaReturn: rateSchema,
-      cashReturn: rateSchema,
+      isaRealReturn: rateSchema,
+      pensionRealReturn: rateSchema,
+      giaInterestRealYield: rateSchema,
+      giaDividendRealYield: rateSchema,
+      giaCapitalGrowthRealYield: rateSchema,
+      cashInterestRealYield: rateSchema,
       inflationRate: rateSchema,
+    }),
+    taxSettings: z.object({
+      jurisdiction: z.enum([
+        "england",
+        "scotland",
+        "wales",
+        "northern-ireland",
+      ]),
     }),
     scenario: z.enum(["conservative", "expected", "optimistic"]),
     withdrawalOrder: z.array(z.enum(withdrawalSources)).length(4),
@@ -95,6 +112,17 @@ export const retirementPlanSchema = z
         code: "custom",
         path: ["income", "employment", "workUntilAge"],
         message: "Choose an age between your current age and life expectancy.",
+      });
+    }
+
+    if (
+      plan.income.secondEmployment.startAge >
+      plan.income.secondEmployment.endAge
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["income", "secondEmployment", "endAge"],
+        message: "Second job end age must be at or after its start age.",
       });
     }
 

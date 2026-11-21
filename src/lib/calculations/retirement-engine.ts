@@ -6,9 +6,15 @@ import type {
   RetirementPlan,
   RetirementSummary,
   ScenarioType,
+  TaxInputs,
+  TaxResult,
   WithdrawalBreakdown,
   WithdrawalSource,
 } from "@/types/retirement";
+import {
+  calculateUkTax,
+  CURRENT_UK_TAX_YEAR,
+} from "./uk-tax";
 
 const MONTHS_PER_YEAR = 12;
 const MONEY_EPSILON = 0.000001;
@@ -25,6 +31,7 @@ interface AccountBalances {
   isa: number;
   pension: number;
   gia: number;
+  giaCostBasis: number;
   cash: number;
 }
 
@@ -34,10 +41,19 @@ interface MortgageYear {
 }
 
 interface AnnualIncome {
+  age: number;
   salary: number;
+  secondSalary: number;
   rental: number;
   other: number;
   statePension: number;
+}
+
+interface InvestmentIncome {
+  interest: number;
+  dividends: number;
+  capitalGrowth: number;
+  totalGrowth: number;
 }
 
 function assertFiniteNonNegative(label: string, value: number): void {
@@ -67,7 +83,19 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
   assertAge("Life expectancy", personalDetails.lifeExpectancy);
   assertAge("State Pension age", personalDetails.statePensionAge);
   assertAge("Work-until age", income.employment.workUntilAge);
+  assertAge("Second employment start age", income.secondEmployment.startAge);
+  assertAge("Second employment end age", income.secondEmployment.endAge);
   assertAge("Mortgage end age", assets.mortgage.mortgageEndAge);
+  if (
+    ![
+      "england",
+      "scotland",
+      "wales",
+      "northern-ireland",
+    ].includes(plan.taxSettings.jurisdiction)
+  ) {
+    throw new RangeError("Choose a supported UK tax jurisdiction.");
+  }
 
   if (
     personalDetails.currentAge >= personalDetails.retirementAge ||
@@ -95,12 +123,17 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
     assets.pension.monthlyContribution,
   );
   assertFiniteNonNegative("GIA value", assets.gia.currentValue);
+  assertFiniteNonNegative("GIA cost basis", assets.gia.costBasis);
   assertFiniteNonNegative("GIA monthly contribution", assets.gia.monthlyContribution);
   assertFiniteNonNegative("Cash value", assets.cash.currentValue);
   assertFiniteNonNegative("Other assets value", assets.otherAssets.currentValue);
   assertFiniteNonNegative("Mortgage balance", assets.mortgage.outstandingBalance);
   assertFiniteNonNegative("Mortgage monthly payment", assets.mortgage.monthlyPayment);
   assertFiniteNonNegative("Current salary", income.employment.currentSalary);
+  assertFiniteNonNegative(
+    "Second employment salary",
+    income.secondEmployment.currentSalary,
+  );
   assertFiniteNonNegative("Rental income", income.otherIncome.rentalIncome);
   assertFiniteNonNegative("Other income", income.otherIncome.otherIncome);
   assertFiniteNonNegative(
@@ -113,11 +146,25 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
     "Annual salary growth rate",
     income.employment.annualSalaryGrowthRate,
   );
-  assertAnnualRate("ISA return", assumptions.isaReturn);
-  assertAnnualRate("Pension return", assumptions.pensionReturn);
-  assertAnnualRate("GIA return", assumptions.giaReturn);
-  assertAnnualRate("Cash return", assumptions.cashReturn);
+  assertAnnualRate(
+    "Second employment annual salary growth rate",
+    income.secondEmployment.annualSalaryGrowthRate,
+  );
+  assertAnnualRate("ISA real return", assumptions.isaRealReturn);
+  assertAnnualRate("Pension real return", assumptions.pensionRealReturn);
+  assertAnnualRate("GIA interest real yield", assumptions.giaInterestRealYield);
+  assertAnnualRate("GIA dividend real yield", assumptions.giaDividendRealYield);
+  assertAnnualRate(
+    "GIA capital growth real yield",
+    assumptions.giaCapitalGrowthRealYield,
+  );
+  assertAnnualRate("Cash interest real yield", assumptions.cashInterestRealYield);
   assertAnnualRate("Inflation rate", assumptions.inflationRate);
+  if (income.secondEmployment.startAge > income.secondEmployment.endAge) {
+    throw new RangeError(
+      "Second employment start age must not exceed its end age.",
+    );
+  }
 
   const bucketIds = new Set<string>();
   for (const bucket of spending.buckets) {
@@ -153,16 +200,36 @@ function applyScenario(
   const adjustment = SCENARIO_RETURN_ADJUSTMENTS[scenario];
   const effectiveAssumptions: Assumptions = {
     ...assumptions,
-    isaReturn: assumptions.isaReturn + adjustment,
-    pensionReturn: assumptions.pensionReturn + adjustment,
-    giaReturn: assumptions.giaReturn + adjustment,
-    cashReturn: assumptions.cashReturn + adjustment,
+    isaRealReturn: assumptions.isaRealReturn + adjustment,
+    pensionRealReturn: assumptions.pensionRealReturn + adjustment,
+    giaInterestRealYield: assumptions.giaInterestRealYield + adjustment,
+    giaDividendRealYield: assumptions.giaDividendRealYield + adjustment,
+    giaCapitalGrowthRealYield:
+      assumptions.giaCapitalGrowthRealYield + adjustment,
+    cashInterestRealYield: assumptions.cashInterestRealYield + adjustment,
   };
 
-  assertAnnualRate("Scenario ISA return", effectiveAssumptions.isaReturn);
-  assertAnnualRate("Scenario pension return", effectiveAssumptions.pensionReturn);
-  assertAnnualRate("Scenario GIA return", effectiveAssumptions.giaReturn);
-  assertAnnualRate("Scenario cash return", effectiveAssumptions.cashReturn);
+  assertAnnualRate("Scenario ISA real return", effectiveAssumptions.isaRealReturn);
+  assertAnnualRate(
+    "Scenario pension real return",
+    effectiveAssumptions.pensionRealReturn,
+  );
+  assertAnnualRate(
+    "Scenario GIA interest real yield",
+    effectiveAssumptions.giaInterestRealYield,
+  );
+  assertAnnualRate(
+    "Scenario GIA dividend real yield",
+    effectiveAssumptions.giaDividendRealYield,
+  );
+  assertAnnualRate(
+    "Scenario GIA capital growth real yield",
+    effectiveAssumptions.giaCapitalGrowthRealYield,
+  );
+  assertAnnualRate(
+    "Scenario cash interest real yield",
+    effectiveAssumptions.cashInterestRealYield,
+  );
 
   return effectiveAssumptions;
 }
@@ -184,6 +251,7 @@ function calculateSpending(plan: RetirementPlan, age: number): number {
 function calculateAnnualIncome(plan: RetirementPlan, age: number): AnnualIncome {
   const { personalDetails } = plan;
   const employment = plan.income.employment;
+  const secondEmployment = plan.income.secondEmployment;
   const yearsFromToday = age - personalDetails.currentAge;
   const inflationFactor =
     (1 + plan.assumptions.inflationRate) ** yearsFromToday;
@@ -192,6 +260,11 @@ function calculateAnnualIncome(plan: RetirementPlan, age: number): AnnualIncome 
       ? employment.currentSalary *
         (1 + employment.annualSalaryGrowthRate) ** yearsFromToday
       : 0;
+  const secondSalary =
+    age >= secondEmployment.startAge && age < secondEmployment.endAge
+      ? secondEmployment.currentSalary *
+        (1 + secondEmployment.annualSalaryGrowthRate) ** yearsFromToday
+      : 0;
   const statePension =
     age >= personalDetails.statePensionAge
       ? plan.income.statePension.annualAmount *
@@ -199,7 +272,9 @@ function calculateAnnualIncome(plan: RetirementPlan, age: number): AnnualIncome 
       : 0;
 
   return {
+    age,
     salary,
+    secondSalary,
     rental: plan.income.otherIncome.rentalIncome * inflationFactor,
     other: plan.income.otherIncome.otherIncome * inflationFactor,
     statePension,
@@ -293,6 +368,7 @@ function createZeroWithdrawals(): WithdrawalBreakdown {
 function createSnapshot(
   age: number,
   periodStartAge: number,
+  taxYear: number,
   balances: AccountBalances,
   otherAssetsValue: number,
   mortgageBalance: number,
@@ -301,11 +377,18 @@ function createSnapshot(
   return {
     age,
     periodStartAge,
+    taxYear,
     salaryIncome: 0,
+    secondSalaryIncome: 0,
     rentalIncome: 0,
     otherIncome: 0,
     statePensionIncome: 0,
+    interestIncome: 0,
+    dividendIncome: 0,
+    pensionDrawdownIncome: 0,
+    realizedCapitalGains: 0,
     totalIncome: 0,
+    tax: { incomeTax: 0, nationalInsurance: 0, capitalGainsTax: 0, totalTax: 0 },
     spending: 0,
     mortgagePayment: 0,
     mortgageBalance,
@@ -317,6 +400,7 @@ function createSnapshot(
     isaValue: balances.isa,
     pensionValue: balances.pension,
     giaValue: balances.gia,
+    giaCostBasis: balances.giaCostBasis,
     cashValue: balances.cash,
     otherAssetsValue,
     totalInvestedAssets: calculateInvestedAssets(balances),
@@ -325,34 +409,63 @@ function createSnapshot(
   };
 }
 
+function realYieldToNominal(realYield: number, inflationRate: number): number {
+  return (1 + realYield) * (1 + inflationRate) - 1;
+}
+
 function calculateInvestmentGrowth(
   balances: AccountBalances,
   assumptions: Assumptions,
-): { balances: AccountBalances; growth: number } {
-  const isaGrowth = balances.isa * assumptions.isaReturn;
-  const pensionGrowth = balances.pension * assumptions.pensionReturn;
-  const giaGrowth = balances.gia * assumptions.giaReturn;
-  const cashGrowth = balances.cash * assumptions.cashReturn;
+): { balances: AccountBalances; income: InvestmentIncome } {
+  const inflation = assumptions.inflationRate;
+  const isaGrowth =
+    balances.isa * realYieldToNominal(assumptions.isaRealReturn, inflation);
+  const pensionGrowth =
+    balances.pension *
+    realYieldToNominal(assumptions.pensionRealReturn, inflation);
+  const giaInterest =
+    balances.gia *
+    realYieldToNominal(assumptions.giaInterestRealYield, inflation);
+  const giaDividends =
+    balances.gia *
+    realYieldToNominal(assumptions.giaDividendRealYield, inflation);
+  const giaCapitalGrowth =
+    balances.gia *
+    realYieldToNominal(assumptions.giaCapitalGrowthRealYield, inflation);
+  const cashInterest =
+    balances.cash *
+    realYieldToNominal(assumptions.cashInterestRealYield, inflation);
+  const interestIncome = giaInterest + cashInterest;
 
   return {
     balances: {
       isa: balances.isa + isaGrowth,
       pension: balances.pension + pensionGrowth,
-      gia: balances.gia + giaGrowth,
-      cash: balances.cash + cashGrowth,
+      gia: Math.max(0, balances.gia + giaCapitalGrowth),
+      giaCostBasis: balances.giaCostBasis,
+      cash: balances.cash,
     },
-    growth: isaGrowth + pensionGrowth + giaGrowth + cashGrowth,
+    income: {
+      interest: interestIncome,
+      dividends: giaDividends,
+      capitalGrowth: giaCapitalGrowth,
+      totalGrowth:
+        isaGrowth +
+        pensionGrowth +
+        giaCapitalGrowth +
+        interestIncome +
+        giaDividends,
+    },
   };
 }
 
 function addContributions(
   balances: AccountBalances,
   plan: RetirementPlan,
-  periodStartAge: number,
   availableCashflow: number,
+  isEmployed: boolean,
 ): { balances: AccountBalances; contributions: ContributionBreakdown } {
-  const employment = plan.income.employment;
-  if (periodStartAge >= employment.workUntilAge || availableCashflow <= 0) {
+  if (!isEmployed || availableCashflow <= 0) {
     return { balances, contributions: createZeroContributions() };
   }
 
@@ -382,6 +495,7 @@ function addContributions(
       isa: balances.isa + contributions.isaContribution,
       pension: balances.pension + contributions.pensionContribution,
       gia: balances.gia + contributions.giaContribution,
+      giaCostBasis: balances.giaCostBasis + contributions.giaContribution,
       cash: balances.cash,
     },
     contributions,
@@ -393,10 +507,17 @@ function withdrawFromSource(
   requestedAmount: number,
   balances: AccountBalances,
   withdrawals: WithdrawalBreakdown,
-): number {
+): { remaining: number; realizedCapitalGain: number } {
   const available = balances[source];
   const amount = Math.min(available, requestedAmount);
   balances[source] = Math.max(0, available - amount);
+  let realizedCapitalGain = 0;
+
+  if (source === "gia" && available > MONEY_EPSILON) {
+    const costBasisSold = balances.giaCostBasis * (amount / available);
+    realizedCapitalGain = amount - costBasisSold;
+    balances.giaCostBasis = Math.max(0, balances.giaCostBasis - costBasisSold);
+  }
 
   switch (source) {
     case "cash":
@@ -413,7 +534,106 @@ function withdrawFromSource(
       break;
   }
 
-  return requestedAmount - amount;
+  return {
+    remaining: requestedAmount - amount,
+    realizedCapitalGain,
+  };
+}
+
+function createTaxInputs(
+  plan: RetirementPlan,
+  taxYear: number,
+  annualIncome: AnnualIncome,
+  investmentIncome: InvestmentIncome,
+  withdrawals: WithdrawalBreakdown,
+  realizedCapitalGains: number,
+): TaxInputs {
+  return {
+    taxYear,
+    inflationRate: plan.assumptions.inflationRate,
+    jurisdiction: plan.taxSettings.jurisdiction,
+    age: annualIncome.age,
+    statePensionAge: plan.personalDetails.statePensionAge,
+    employmentIncomes: [annualIncome.salary, annualIncome.secondSalary],
+    rentalProfit: annualIncome.rental,
+    otherTaxableIncome: annualIncome.other,
+    pensionIncome: withdrawals.pensionWithdrawal,
+    statePensionIncome: annualIncome.statePension,
+    savingsInterest: Math.max(0, investmentIncome.interest),
+    dividendIncome: Math.max(0, investmentIncome.dividends),
+    capitalGains: realizedCapitalGains,
+  };
+}
+
+interface WithdrawalEvaluation {
+  balances: AccountBalances;
+  withdrawals: WithdrawalBreakdown;
+  realizedCapitalGains: number;
+  tax: TaxResult;
+  totalWithdrawn: number;
+  netFunds: number;
+}
+
+function evaluateWithdrawals(
+  plan: RetirementPlan,
+  taxYear: number,
+  annualIncome: AnnualIncome,
+  investmentIncome: InvestmentIncome,
+  balancesBeforeWithdrawals: AccountBalances,
+  withdrawalOrder: WithdrawalSource[],
+  requestedAmount: number,
+): WithdrawalEvaluation {
+  const balances = { ...balancesBeforeWithdrawals };
+  const withdrawals = createZeroWithdrawals();
+  let remaining = requestedAmount;
+  let realizedCapitalGains = 0;
+
+  for (const source of withdrawalOrder) {
+    const result = withdrawFromSource(
+      source,
+      remaining,
+      balances,
+      withdrawals,
+    );
+    remaining = result.remaining;
+    realizedCapitalGains += result.realizedCapitalGain;
+    if (remaining <= MONEY_EPSILON) {
+      break;
+    }
+  }
+
+  const totalWithdrawn =
+    withdrawals.cashWithdrawal +
+    withdrawals.giaWithdrawal +
+    withdrawals.isaWithdrawal +
+    withdrawals.pensionWithdrawal;
+  const tax = calculateUkTax(
+    createTaxInputs(
+      plan,
+      taxYear,
+      annualIncome,
+      investmentIncome,
+      withdrawals,
+      realizedCapitalGains,
+    ),
+  );
+  const recurringIncome =
+    annualIncome.salary +
+    annualIncome.secondSalary +
+    annualIncome.rental +
+    annualIncome.other +
+    annualIncome.statePension +
+    investmentIncome.interest +
+    investmentIncome.dividends;
+
+  return {
+    balances,
+    withdrawals,
+    realizedCapitalGains,
+    tax,
+    totalWithdrawn,
+    netFunds: recurringIncome + totalWithdrawn - tax.totalTax,
+  };
 }
 
 function simulateYear(
@@ -425,66 +645,139 @@ function simulateYear(
 ): ProjectionYear {
   // Returns apply to opening balances; scheduled contributions are added at year-end.
   const growthResult = calculateInvestmentGrowth(openingBalances, assumptions);
+  const balancesAfterGrowth = growthResult.balances;
   const annualIncome = calculateAnnualIncome(plan, periodStartAge);
+  const taxYear =
+    CURRENT_UK_TAX_YEAR +
+    periodStartAge -
+    plan.personalDetails.currentAge;
   const mortgageYear = calculateMortgageYear(
     openingMortgageBalance,
     plan,
     periodStartAge,
   );
   const spending = calculateSpending(plan, periodStartAge);
-  const totalIncome =
+  const recurringIncome =
     annualIncome.salary +
+    annualIncome.secondSalary +
     annualIncome.rental +
     annualIncome.other +
-    annualIncome.statePension;
-  const netCashflow = totalIncome - spending - mortgageYear.payment;
-  // Contributions are funded from positive cashflow, not from account withdrawals.
-  const contributionResult = addContributions(
-    growthResult.balances,
-    plan,
-    periodStartAge,
-    netCashflow,
+    annualIncome.statePension +
+    growthResult.income.interest +
+    growthResult.income.dividends;
+  const zeroWithdrawals = createZeroWithdrawals();
+  const baseTax = calculateUkTax(
+    createTaxInputs(
+      plan,
+      taxYear,
+      annualIncome,
+      growthResult.income,
+      zeroWithdrawals,
+      0,
+    ),
   );
-  const balances = contributionResult.balances;
-  const totalContributions =
-    contributionResult.contributions.isaContribution +
-    contributionResult.contributions.pensionContribution +
-    contributionResult.contributions.giaContribution;
-  let remainingCashflow = netCashflow - totalContributions;
-
-  if (remainingCashflow > 0) {
-    balances.cash += remainingCashflow;
-    remainingCashflow = 0;
-  }
-
-  const withdrawals = createZeroWithdrawals();
+  const spendingAndMortgage = spending + mortgageYear.payment;
+  const netCashflowBeforeWithdrawals =
+    recurringIncome - baseTax.totalTax - spendingAndMortgage;
+  const isEmployed =
+    annualIncome.salary > 0 || annualIncome.secondSalary > 0;
+  let contributionBreakdown = createZeroContributions();
+  let withdrawals = zeroWithdrawals;
+  let realizedCapitalGains = 0;
+  let tax = baseTax;
+  let balances = balancesAfterGrowth;
   let unfundedShortfall = 0;
-  if (remainingCashflow < 0) {
-    let remainingNeed = -remainingCashflow;
-    for (const source of plan.withdrawalOrder) {
-      remainingNeed = withdrawFromSource(
-        source,
-        remainingNeed,
-        balances,
-        withdrawals,
-      );
-      if (remainingNeed <= MONEY_EPSILON) {
-        remainingNeed = 0;
-        break;
+  let pensionDrawdownIncome = 0;
+
+  if (netCashflowBeforeWithdrawals > 0) {
+    const contributionResult = addContributions(
+      balancesAfterGrowth,
+      plan,
+      netCashflowBeforeWithdrawals,
+      isEmployed,
+    );
+    balances = contributionResult.balances;
+    contributionBreakdown = contributionResult.contributions;
+    const totalContributions =
+      contributionBreakdown.isaContribution +
+      contributionBreakdown.pensionContribution +
+      contributionBreakdown.giaContribution;
+    balances.cash += netCashflowBeforeWithdrawals - totalContributions;
+  } else if (netCashflowBeforeWithdrawals < 0) {
+    const availableAssets =
+      balancesAfterGrowth.cash +
+      balancesAfterGrowth.gia +
+      balancesAfterGrowth.isa +
+      balancesAfterGrowth.pension;
+    const requiredNetFunds = spendingAndMortgage;
+    let high = availableAssets;
+    const highEvaluation = evaluateWithdrawals(
+      plan,
+      taxYear,
+      annualIncome,
+      growthResult.income,
+      balancesAfterGrowth,
+      plan.withdrawalOrder,
+      high,
+    );
+
+    if (highEvaluation.netFunds >= requiredNetFunds) {
+      let low = 0;
+      for (let iteration = 0; iteration < 64; iteration += 1) {
+        const midpoint = (low + high) / 2;
+        const evaluation = evaluateWithdrawals(
+          plan,
+          taxYear,
+          annualIncome,
+          growthResult.income,
+          balancesAfterGrowth,
+          plan.withdrawalOrder,
+          midpoint,
+        );
+        if (evaluation.netFunds >= requiredNetFunds) {
+          high = midpoint;
+        } else {
+          low = midpoint;
+        }
       }
     }
-    unfundedShortfall = remainingNeed;
+
+    const evaluation = evaluateWithdrawals(
+      plan,
+      taxYear,
+      annualIncome,
+      growthResult.income,
+      balancesAfterGrowth,
+      plan.withdrawalOrder,
+      high,
+    );
+    balances = evaluation.balances;
+    withdrawals = evaluation.withdrawals;
+    realizedCapitalGains = evaluation.realizedCapitalGains;
+    tax = evaluation.tax;
+    pensionDrawdownIncome = withdrawals.pensionWithdrawal;
+    unfundedShortfall = Math.max(0, requiredNetFunds - evaluation.netFunds);
   }
+
+  const totalIncome =
+    recurringIncome + pensionDrawdownIncome;
+  const netCashflow =
+    recurringIncome +
+    pensionDrawdownIncome -
+    tax.totalTax -
+    spendingAndMortgage;
 
   const accountValues: AccountBalances = {
     isa: balances.isa,
     pension: balances.pension,
     gia: balances.gia,
+    giaCostBasis: balances.giaCostBasis,
     cash: balances.cash,
   };
   const snapshot = createSnapshot(
     periodStartAge + 1,
     periodStartAge,
+    taxYear,
     accountValues,
     plan.assets.otherAssets.currentValue,
     mortgageYear.balance,
@@ -493,16 +786,22 @@ function simulateYear(
   return {
     ...snapshot,
     salaryIncome: annualIncome.salary,
+    secondSalaryIncome: annualIncome.secondSalary,
     rentalIncome: annualIncome.rental,
     otherIncome: annualIncome.other,
     statePensionIncome: annualIncome.statePension,
+    interestIncome: growthResult.income.interest,
+    dividendIncome: growthResult.income.dividends,
+    pensionDrawdownIncome,
+    realizedCapitalGains,
     totalIncome,
+    tax,
     spending,
     mortgagePayment: mortgageYear.payment,
-    contributions: contributionResult.contributions,
+    contributions: contributionBreakdown,
     withdrawals,
     unfundedShortfall,
-    investmentGrowth: growthResult.growth,
+    investmentGrowth: growthResult.income.totalGrowth,
     netCashflow,
   };
 }
@@ -520,8 +819,32 @@ function calculateFinancialIndependenceAge(
       age,
     ).payment;
     const income = calculateAnnualIncome(plan, age);
+    const projectionYear = yearlyResults.find((result) => result.age === age);
+    if (!projectionYear) {
+      continue;
+    }
+    const nonEmploymentTax = calculateUkTax({
+      taxYear: projectionYear.taxYear,
+      inflationRate: plan.assumptions.inflationRate,
+      jurisdiction: plan.taxSettings.jurisdiction,
+      age,
+      statePensionAge: plan.personalDetails.statePensionAge,
+      employmentIncomes: [],
+      rentalProfit: income.rental,
+      otherTaxableIncome: income.other,
+      pensionIncome: 0,
+      statePensionIncome: income.statePension,
+      savingsInterest: Math.max(0, projectionYear.interestIncome),
+      dividendIncome: Math.max(0, projectionYear.dividendIncome),
+      capitalGains: 0,
+    });
     const nonEmploymentIncome =
-      income.rental + income.other + income.statePension;
+      income.rental +
+      income.other +
+      income.statePension +
+      projectionYear.interestIncome +
+      projectionYear.dividendIncome -
+      nonEmploymentTax.totalTax;
     const annualSpendingGap = Math.max(
       0,
       spending + mortgagePayment - nonEmploymentIncome,
@@ -585,7 +908,7 @@ function calculateSummary(
 }
 
 /**
- * Returns a pre-tax projection with balances recorded at each age.
+ * Returns an after-tax projection with balances recorded at each age.
  * The opening row matches current inputs; later rows close the prior age-year.
  */
 export function calculateProjection(
@@ -598,12 +921,14 @@ export function calculateProjection(
     isa: plan.assets.isa.currentValue,
     pension: plan.assets.pension.currentValue,
     gia: plan.assets.gia.currentValue,
+    giaCostBasis: plan.assets.gia.costBasis,
     cash: plan.assets.cash.currentValue,
   };
   const yearlyResults: ProjectionYear[] = [
     createSnapshot(
       plan.personalDetails.currentAge,
       plan.personalDetails.currentAge,
+      CURRENT_UK_TAX_YEAR,
       balances,
       plan.assets.otherAssets.currentValue,
       plan.assets.mortgage.outstandingBalance,
@@ -630,6 +955,7 @@ export function calculateProjection(
       isa: year.isaValue,
       pension: year.pensionValue,
       gia: year.giaValue,
+      giaCostBasis: year.giaCostBasis,
       cash: year.cashValue,
     };
     currentMortgageBalance = year.mortgageBalance;

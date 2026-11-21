@@ -177,6 +177,13 @@ export function RetirementPlanForm() {
                 prefix="£"
               />
               <NumberField
+                error={errors.assets?.gia?.costBasis?.message}
+                label="GIA cost basis"
+                name="assets.gia.costBasis"
+                prefix="£"
+                description="What you paid for the investments currently held."
+              />
+              <NumberField
                 error={errors.assets?.gia?.monthlyContribution?.message}
                 label="GIA monthly contribution"
                 name="assets.gia.monthlyContribution"
@@ -244,7 +251,7 @@ export function RetirementPlanForm() {
       </FormSection>
 
       <FormSection
-        description="Income amounts are annual. Non-salary income is uprated with your general inflation assumption."
+        description="Amounts are annual. Income increases with inflation and salary growth assumptions."
         id="income"
         number="03"
         title="Income"
@@ -279,19 +286,56 @@ export function RetirementPlanForm() {
           </div>
           <div>
             <h3 className="mb-4 text-sm font-semibold text-slate-800">
+              Second employment
+            </h3>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <NumberField
+                error={errors.income?.secondEmployment?.currentSalary?.message}
+                label="Current annual salary"
+                name="income.secondEmployment.currentSalary"
+                prefix="£"
+                suffix="/ year"
+              />
+              <PercentageField
+                label="Annual salary growth"
+                name="income.secondEmployment.annualSalaryGrowthRate"
+              />
+              <NumberField
+                error={errors.income?.secondEmployment?.startAge?.message}
+                label="Start age"
+                max={120}
+                min={0}
+                name="income.secondEmployment.startAge"
+                step={1}
+                suffix="years"
+              />
+              <NumberField
+                error={errors.income?.secondEmployment?.endAge?.message}
+                label="End age"
+                max={120}
+                min={0}
+                name="income.secondEmployment.endAge"
+                step={1}
+                suffix="years"
+              />
+            </div>
+          </div>
+          <div>
+            <h3 className="mb-4 text-sm font-semibold text-slate-800">
               Other income
             </h3>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <NumberField
                 error={errors.income?.otherIncome?.rentalIncome?.message}
-                label="Rental income"
+                label="Rental taxable profit"
                 name="income.otherIncome.rentalIncome"
                 prefix="£"
                 suffix="/ year"
+                description="Enter profit after allowable expenses, not gross rent."
               />
               <NumberField
                 error={errors.income?.otherIncome?.otherIncome?.message}
-                label="Other income"
+                label="Other taxable income"
                 name="income.otherIncome.otherIncome"
                 prefix="£"
                 suffix="/ year"
@@ -430,19 +474,60 @@ export function RetirementPlanForm() {
       </FormSection>
 
       <FormSection
-        description="These assumptions affect annual growth and spending projections."
+        description="Tax jurisdiction and real yields affect annual tax and investment growth."
         id="assumptions"
         number="05"
-        title="Investment assumptions"
+        title="Tax and investment assumptions"
       >
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <PercentageField label="ISA return" name="assumptions.isaReturn" />
+          <div>
+            <label
+              className="mb-1.5 block text-sm font-medium text-slate-700"
+              htmlFor="tax-jurisdiction"
+            >
+              UK tax jurisdiction
+            </label>
+            <select
+              className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition hover:border-slate-400 focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10"
+              id="tax-jurisdiction"
+              {...register("taxSettings.jurisdiction")}
+            >
+              <option value="england">England</option>
+              <option value="scotland">Scotland</option>
+              <option value="wales">Wales</option>
+              <option value="northern-ireland">Northern Ireland</option>
+            </select>
+          </div>
           <PercentageField
-            label="Pension return"
-            name="assumptions.pensionReturn"
+            label="ISA real return"
+            name="assumptions.isaRealReturn"
+            description="Annual return above inflation."
           />
-          <PercentageField label="GIA return" name="assumptions.giaReturn" />
-          <PercentageField label="Cash return" name="assumptions.cashReturn" />
+          <PercentageField
+            label="Pension real return"
+            name="assumptions.pensionRealReturn"
+            description="Annual return above inflation."
+          />
+          <PercentageField
+            label="GIA interest real yield"
+            name="assumptions.giaInterestRealYield"
+            description="Interest yield above inflation; negative values are allowed."
+          />
+          <PercentageField
+            label="GIA dividend real yield"
+            name="assumptions.giaDividendRealYield"
+            description="Dividend yield above inflation; negative values are allowed."
+          />
+          <PercentageField
+            label="GIA capital growth real yield"
+            name="assumptions.giaCapitalGrowthRealYield"
+            description="Price growth above inflation. Gains are taxed only when realized."
+          />
+          <PercentageField
+            label="Cash interest real yield"
+            name="assumptions.cashInterestRealYield"
+            description="Interest yield above inflation; negative values are allowed."
+          />
           <PercentageField
             label="General inflation"
             name="assumptions.inflationRate"

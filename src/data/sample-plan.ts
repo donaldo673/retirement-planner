@@ -18,7 +18,7 @@ export function createSampleRetirementPlan(): RetirementPlan {
     assets: {
       isa: { currentValue: 85_000, monthlyContribution: 500 },
       pension: { currentValue: 220_000, monthlyContribution: 1_200 },
-      gia: { currentValue: 40_000, monthlyContribution: 100 },
+      gia: { currentValue: 40_000, costBasis: 40_000, monthlyContribution: 100 },
       cash: { currentValue: 25_000 },
       otherAssets: { currentValue: 20_000 },
       mortgage: {
@@ -33,6 +33,12 @@ export function createSampleRetirementPlan(): RetirementPlan {
         currentSalary: 65_000,
         annualSalaryGrowthRate: 0.03,
         workUntilAge: 67,
+      },
+      secondEmployment: {
+        currentSalary: 0,
+        annualSalaryGrowthRate: 0,
+        startAge: 45,
+        endAge: 67,
       },
       otherIncome: {
         rentalIncome: 0,
@@ -103,12 +109,15 @@ export function createSampleRetirementPlan(): RetirementPlan {
       ],
     },
     assumptions: {
-      isaReturn: 0.05,
-      pensionReturn: 0.05,
-      giaReturn: 0.05,
-      cashReturn: 0.02,
+      isaRealReturn: 0.025,
+      pensionRealReturn: 0.025,
+      giaInterestRealYield: 0,
+      giaDividendRealYield: 0.015,
+      giaCapitalGrowthRealYield: 0.01,
+      cashInterestRealYield: -0.005,
       inflationRate: 0.025,
     },
+    taxSettings: { jurisdiction: "england" },
     scenario: "expected",
     withdrawalOrder: ["cash", "gia", "isa", "pension"],
   };

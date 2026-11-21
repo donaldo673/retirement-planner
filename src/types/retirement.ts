@@ -6,6 +6,8 @@ export type WithdrawalSource = "cash" | "gia" | "isa" | "pension";
 
 export type ProjectionStatus = "green" | "amber" | "red";
 
+export type TaxJurisdiction = "england" | "scotland" | "wales" | "northern-ireland";
+
 export interface PersonalDetails {
   currentAge: number;
   retirementAge: number;
@@ -17,6 +19,10 @@ export interface PersonalDetails {
 export interface InvestmentAccount {
   currentValue: number;
   monthlyContribution: number;
+}
+
+export interface GeneralInvestmentAccount extends InvestmentAccount {
+  costBasis: number;
 }
 
 export interface CashAccount {
@@ -37,7 +43,7 @@ export interface Mortgage {
 export interface Assets {
   isa: InvestmentAccount;
   pension: InvestmentAccount;
-  gia: InvestmentAccount;
+  gia: GeneralInvestmentAccount;
   cash: CashAccount;
   otherAssets: OtherAssets;
   mortgage: Mortgage;
@@ -47,6 +53,13 @@ export interface EmploymentIncome {
   currentSalary: number;
   annualSalaryGrowthRate: number;
   workUntilAge: number;
+}
+
+export interface SecondEmploymentIncome {
+  currentSalary: number;
+  annualSalaryGrowthRate: number;
+  startAge: number;
+  endAge: number;
 }
 
 export interface OtherIncome {
@@ -60,6 +73,7 @@ export interface StatePension {
 
 export interface Income {
   employment: EmploymentIncome;
+  secondEmployment: SecondEmploymentIncome;
   otherIncome: OtherIncome;
   statePension: StatePension;
 }
@@ -78,11 +92,17 @@ export interface SpendingPlan {
 }
 
 export interface Assumptions {
-  isaReturn: number;
-  pensionReturn: number;
-  giaReturn: number;
-  cashReturn: number;
+  isaRealReturn: number;
+  pensionRealReturn: number;
+  giaInterestRealYield: number;
+  giaDividendRealYield: number;
+  giaCapitalGrowthRealYield: number;
+  cashInterestRealYield: number;
   inflationRate: number;
+}
+
+export interface TaxSettings {
+  jurisdiction: TaxJurisdiction;
 }
 
 export interface Scenario {
@@ -96,6 +116,7 @@ export interface RetirementPlan {
   income: Income;
   spending: SpendingPlan;
   assumptions: Assumptions;
+  taxSettings: TaxSettings;
   scenario: ScenarioType;
   withdrawalOrder: WithdrawalSource[];
 }
@@ -116,12 +137,19 @@ export interface WithdrawalBreakdown {
 export interface ProjectionYear {
   age: number;
   periodStartAge: number;
+  taxYear: number;
 
   salaryIncome: number;
+  secondSalaryIncome: number;
   rentalIncome: number;
   otherIncome: number;
   statePensionIncome: number;
+  interestIncome: number;
+  dividendIncome: number;
+  pensionDrawdownIncome: number;
+  realizedCapitalGains: number;
   totalIncome: number;
+  tax: TaxResult;
 
   spending: number;
   mortgagePayment: number;
@@ -136,6 +164,7 @@ export interface ProjectionYear {
   isaValue: number;
   pensionValue: number;
   giaValue: number;
+  giaCostBasis: number;
   cashValue: number;
   otherAssetsValue: number;
   totalInvestedAssets: number;
@@ -160,31 +189,26 @@ export interface ProjectionResult {
 }
 
 export interface TaxInputs {
-  earnedIncome: number;
+  taxYear: number;
+  inflationRate: number;
+  jurisdiction: TaxJurisdiction;
+  age: number;
+  statePensionAge: number;
+  employmentIncomes: number[];
+  rentalProfit: number;
+  otherTaxableIncome: number;
   pensionIncome: number;
   statePensionIncome: number;
+  savingsInterest: number;
   dividendIncome: number;
   capitalGains: number;
-  pensionDrawdown: number;
 }
 
 export interface TaxResult {
   incomeTax: number;
   nationalInsurance: number;
-  statePensionTax: number;
-  pensionDrawdownTax: number;
-  dividendTax: number;
   capitalGainsTax: number;
   totalTax: number;
-}
-
-export interface TaxEngine {
-  calculateIncomeTax(inputs: TaxInputs): number;
-  calculateNationalInsurance(inputs: TaxInputs): number;
-  calculateStatePensionTaxation(inputs: TaxInputs): number;
-  calculatePensionDrawdownTaxation(inputs: TaxInputs): number;
-  calculateDividendTax(inputs: TaxInputs): number;
-  calculateCapitalGainsTax(inputs: TaxInputs): number;
 }
 
 export interface SimulationInputs {

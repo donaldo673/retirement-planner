@@ -21,7 +21,7 @@ const plannerSections = [
   { href: "#assets", label: "Assets & liabilities" },
   { href: "#income", label: "Income" },
   { href: "#spending", label: "Spending plan" },
-  { href: "#assumptions", label: "Assumptions" },
+  { href: "#assumptions", label: "Tax & returns" },
   { href: "#withdrawals", label: "Withdrawal order" },
 ];
 
@@ -150,8 +150,8 @@ function Sidebar() {
       <div className="mt-auto rounded-2xl bg-slate-50 p-4">
         <p className="text-sm font-semibold text-slate-800">Planning note</p>
         <p className="mt-2 text-xs leading-5 text-slate-500">
-          Projections are estimates, shown before tax. Your plan stays in this
-          browser session for now.
+          Projections estimate income tax, National Insurance, and capital gains
+          tax using your selected UK jurisdiction.
         </p>
       </div>
     </aside>
@@ -170,6 +170,7 @@ export function RetirementDashboard() {
     return parsedPlan.success ? calculateProjection(parsedPlan.data) : null;
   }, [watchedPlan]);
   const summary = projection?.summary;
+  const firstProjectionYear = projection?.yearlyResults[1];
   const status = summary ? statusContent[summary.status] : null;
 
   function resetPlan() {
@@ -255,7 +256,7 @@ export function RetirementDashboard() {
                   Example plan
                 </span>
                 <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600">
-                  GBP · pre-tax
+                  GBP · after tax
                 </span>
               </div>
             </div>
@@ -308,10 +309,19 @@ export function RetirementDashboard() {
                     marker="Σ"
                     value={formatCurrency(summary.totalRetirementSpending)}
                   />
+                  {firstProjectionYear ? (
+                    <MetricCard
+                      detail={`Income tax ${formatCurrency(firstProjectionYear.tax.incomeTax)} · NI ${formatCurrency(firstProjectionYear.tax.nationalInsurance)} · CGT ${formatCurrency(firstProjectionYear.tax.capitalGainsTax)}`}
+                      label={`Estimated tax (${firstProjectionYear.taxYear}/${String(firstProjectionYear.taxYear + 1).slice(-2)})`}
+                      marker="T"
+                      value={formatCurrency(firstProjectionYear.tax.totalTax)}
+                    />
+                  ) : null}
                 </div>
                 <p className="mt-3 text-xs leading-5 text-slate-500">
-                  Estimates are illustrative and do not include tax, fees, or
-                  investment volatility.
+                  Tax estimates include generated GIA interest, dividends,
+                  realized gains, and taxable pension withdrawals. Estimates
+                  do not include fees or investment volatility.
                 </p>
               </>
             ) : (

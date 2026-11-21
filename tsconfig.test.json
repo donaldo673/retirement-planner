@@ -13,7 +13,9 @@
     "src/types/retirement.ts",
     "src/data/sample-plan.ts",
     "src/lib/calculations/retirement-engine.ts",
-    "src/lib/calculations/retirement-engine.test.ts"
+    "src/lib/calculations/retirement-engine.test.ts",
+    "src/lib/calculations/uk-tax.ts",
+    "src/lib/calculations/uk-tax.test.ts"
   ],
   "exclude": ["node_modules", ".next"]
 }
