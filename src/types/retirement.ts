@@ -8,11 +8,11 @@ export type ProjectionStatus = "green" | "amber" | "red";
 
 export type TaxJurisdiction = "england" | "scotland" | "wales" | "northern-ireland";
 
+export type PersonKey = "person1" | "person2";
+
 export interface PersonalDetails {
-  currentAge: number;
   retirementAge: number;
   lifeExpectancy: number;
-  statePensionAge: number;
   householdType: HouseholdType;
 }
 
@@ -41,8 +41,6 @@ export interface Mortgage {
 }
 
 export interface Assets {
-  isa: InvestmentAccount;
-  pension: InvestmentAccount;
   gia: GeneralInvestmentAccount;
   cash: CashAccount;
   otherAssets: OtherAssets;
@@ -72,10 +70,20 @@ export interface StatePension {
 }
 
 export interface Income {
+  currentAge: number;
+  statePensionAge: number;
   employment: EmploymentIncome;
   secondEmployment: SecondEmploymentIncome;
   otherIncome: OtherIncome;
   statePension: StatePension;
+}
+
+export interface PersonPlan {
+  income: Income;
+  assets: {
+    isa: InvestmentAccount;
+    pension: InvestmentAccount;
+  };
 }
 
 export interface SpendingBucket {
@@ -112,8 +120,8 @@ export interface Scenario {
 
 export interface RetirementPlan {
   personalDetails: PersonalDetails;
+  people: Record<PersonKey, PersonPlan>;
   assets: Assets;
-  income: Income;
   spending: SpendingPlan;
   assumptions: Assumptions;
   taxSettings: TaxSettings;
@@ -125,6 +133,10 @@ export interface ContributionBreakdown {
   isaContribution: number;
   pensionContribution: number;
   giaContribution: number;
+  byPerson: Record<
+    PersonKey,
+    { isaContribution: number; pensionContribution: number }
+  >;
 }
 
 export interface WithdrawalBreakdown {
@@ -132,6 +144,24 @@ export interface WithdrawalBreakdown {
   giaWithdrawal: number;
   isaWithdrawal: number;
   pensionWithdrawal: number;
+  byPerson: Record<
+    PersonKey,
+    { isaWithdrawal: number; pensionWithdrawal: number }
+  >;
+}
+
+export interface AnnualPersonIncome {
+  age: number;
+  salaryIncome: number;
+  secondSalaryIncome: number;
+  rentalIncome: number;
+  otherIncomeAmount: number;
+  statePensionIncome: number;
+  interestIncome: number;
+  dividendIncome: number;
+  pensionDrawdownIncome: number;
+  realizedCapitalGains: number;
+  totalIncome: number;
 }
 
 export interface ProjectionYear {
@@ -150,6 +180,8 @@ export interface ProjectionYear {
   realizedCapitalGains: number;
   totalIncome: number;
   tax: TaxResult;
+  personIncomes: Record<PersonKey, AnnualPersonIncome>;
+  personTaxes: Record<PersonKey, TaxResult>;
 
   spending: number;
   mortgagePayment: number;
@@ -163,6 +195,8 @@ export interface ProjectionYear {
 
   isaValue: number;
   pensionValue: number;
+  personIsaValues: Record<PersonKey, number>;
+  personPensionValues: Record<PersonKey, number>;
   giaValue: number;
   giaCostBasis: number;
   cashValue: number;
@@ -205,6 +239,9 @@ export interface TaxInputs {
 }
 
 export interface TaxResult {
+  grossIncome: number;
+  personalAllowance: number;
+  taxableIncome: number;
   incomeTax: number;
   nationalInsurance: number;
   capitalGainsTax: number;

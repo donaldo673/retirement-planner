@@ -360,7 +360,9 @@ export function RetirementDashboard() {
               noValidate
               onSubmit={(event) => event.preventDefault()}
             >
-              <RetirementPlanForm />
+              <RetirementPlanForm
+                personTaxes={firstProjectionYear?.personTaxes}
+              />
             </form>
           </FormProvider>
 

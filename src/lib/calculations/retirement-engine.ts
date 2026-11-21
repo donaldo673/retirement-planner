@@ -6,6 +6,8 @@ import type {
   RetirementPlan,
   RetirementSummary,
   ScenarioType,
+  AnnualPersonIncome,
+  PersonKey,
   TaxInputs,
   TaxResult,
   WithdrawalBreakdown,
@@ -28,8 +30,8 @@ const SCENARIO_RETURN_ADJUSTMENTS: Record<ScenarioType, number> = {
 };
 
 interface AccountBalances {
-  isa: number;
-  pension: number;
+  isa: Record<PersonKey, number>;
+  pension: Record<PersonKey, number>;
   gia: number;
   giaCostBasis: number;
   cash: number;
@@ -75,17 +77,77 @@ function assertAge(label: string, value: number): void {
 }
 
 export function validateRetirementPlan(plan: RetirementPlan): void {
-  const { personalDetails, assets, income, spending, assumptions, withdrawalOrder } =
+  const { personalDetails, people, assets, spending, assumptions, withdrawalOrder } =
     plan;
+  const currentAge = people.person1.income.currentAge;
 
-  assertAge("Current age", personalDetails.currentAge);
   assertAge("Retirement age", personalDetails.retirementAge);
   assertAge("Life expectancy", personalDetails.lifeExpectancy);
-  assertAge("State Pension age", personalDetails.statePensionAge);
-  assertAge("Work-until age", income.employment.workUntilAge);
-  assertAge("Second employment start age", income.secondEmployment.startAge);
-  assertAge("Second employment end age", income.secondEmployment.endAge);
   assertAge("Mortgage end age", assets.mortgage.mortgageEndAge);
+  for (const personKey of ["person1", "person2"] as const) {
+    const person = people[personKey];
+    const { income: personIncome, assets: personAssets } = person;
+    assertAge(`${personKey} current age`, personIncome.currentAge);
+    assertAge(`${personKey} State Pension age`, personIncome.statePensionAge);
+    assertAge(`${personKey} work-until age`, personIncome.employment.workUntilAge);
+    assertAge(
+      `${personKey} second employment start age`,
+      personIncome.secondEmployment.startAge,
+    );
+    assertAge(
+      `${personKey} second employment end age`,
+      personIncome.secondEmployment.endAge,
+    );
+    assertFiniteNonNegative(`${personKey} ISA value`, personAssets.isa.currentValue);
+    assertFiniteNonNegative(
+      `${personKey} ISA monthly contribution`,
+      personAssets.isa.monthlyContribution,
+    );
+    assertFiniteNonNegative(
+      `${personKey} pension value`,
+      personAssets.pension.currentValue,
+    );
+    assertFiniteNonNegative(
+      `${personKey} pension monthly contribution`,
+      personAssets.pension.monthlyContribution,
+    );
+    assertFiniteNonNegative(
+      `${personKey} salary`,
+      personIncome.employment.currentSalary,
+    );
+    assertFiniteNonNegative(
+      `${personKey} second employment salary`,
+      personIncome.secondEmployment.currentSalary,
+    );
+    assertFiniteNonNegative(
+      `${personKey} rental taxable profit`,
+      personIncome.otherIncome.rentalIncome,
+    );
+    assertFiniteNonNegative(
+      `${personKey} other taxable income`,
+      personIncome.otherIncome.otherIncome,
+    );
+    assertFiniteNonNegative(
+      `${personKey} State Pension amount`,
+      personIncome.statePension.annualAmount,
+    );
+    assertAnnualRate(
+      `${personKey} annual salary growth rate`,
+      personIncome.employment.annualSalaryGrowthRate,
+    );
+    assertAnnualRate(
+      `${personKey} second employment salary growth rate`,
+      personIncome.secondEmployment.annualSalaryGrowthRate,
+    );
+    if (
+      personIncome.secondEmployment.startAge >
+      personIncome.secondEmployment.endAge
+    ) {
+      throw new RangeError(
+        `${personKey} second employment start age must not exceed its end age.`,
+      );
+    }
+  }
   if (
     ![
       "england",
@@ -98,7 +160,7 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
   }
 
   if (
-    personalDetails.currentAge >= personalDetails.retirementAge ||
+    currentAge >= personalDetails.retirementAge ||
     personalDetails.retirementAge >= personalDetails.lifeExpectancy
   ) {
     throw new RangeError(
@@ -107,21 +169,13 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
   }
 
   if (
-    income.employment.workUntilAge < personalDetails.currentAge ||
-    income.employment.workUntilAge > personalDetails.lifeExpectancy
+    people.person1.income.employment.workUntilAge > personalDetails.lifeExpectancy
   ) {
     throw new RangeError(
-      "Work-until age must be between current age and life expectancy.",
+      "Person 1 work-until age must not exceed life expectancy.",
     );
   }
 
-  assertFiniteNonNegative("ISA value", assets.isa.currentValue);
-  assertFiniteNonNegative("ISA monthly contribution", assets.isa.monthlyContribution);
-  assertFiniteNonNegative("Pension value", assets.pension.currentValue);
-  assertFiniteNonNegative(
-    "Pension monthly contribution",
-    assets.pension.monthlyContribution,
-  );
   assertFiniteNonNegative("GIA value", assets.gia.currentValue);
   assertFiniteNonNegative("GIA cost basis", assets.gia.costBasis);
   assertFiniteNonNegative("GIA monthly contribution", assets.gia.monthlyContribution);
@@ -129,27 +183,7 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
   assertFiniteNonNegative("Other assets value", assets.otherAssets.currentValue);
   assertFiniteNonNegative("Mortgage balance", assets.mortgage.outstandingBalance);
   assertFiniteNonNegative("Mortgage monthly payment", assets.mortgage.monthlyPayment);
-  assertFiniteNonNegative("Current salary", income.employment.currentSalary);
-  assertFiniteNonNegative(
-    "Second employment salary",
-    income.secondEmployment.currentSalary,
-  );
-  assertFiniteNonNegative("Rental income", income.otherIncome.rentalIncome);
-  assertFiniteNonNegative("Other income", income.otherIncome.otherIncome);
-  assertFiniteNonNegative(
-    "State Pension amount",
-    income.statePension.annualAmount,
-  );
-
   assertFiniteNonNegative("Mortgage interest rate", assets.mortgage.interestRate);
-  assertAnnualRate(
-    "Annual salary growth rate",
-    income.employment.annualSalaryGrowthRate,
-  );
-  assertAnnualRate(
-    "Second employment annual salary growth rate",
-    income.secondEmployment.annualSalaryGrowthRate,
-  );
   assertAnnualRate("ISA real return", assumptions.isaRealReturn);
   assertAnnualRate("Pension real return", assumptions.pensionRealReturn);
   assertAnnualRate("GIA interest real yield", assumptions.giaInterestRealYield);
@@ -160,12 +194,6 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
   );
   assertAnnualRate("Cash interest real yield", assumptions.cashInterestRealYield);
   assertAnnualRate("Inflation rate", assumptions.inflationRate);
-  if (income.secondEmployment.startAge > income.secondEmployment.endAge) {
-    throw new RangeError(
-      "Second employment start age must not exceed its end age.",
-    );
-  }
-
   const bucketIds = new Set<string>();
   for (const bucket of spending.buckets) {
     if (!bucket.id.trim() || !bucket.name.trim() || bucketIds.has(bucket.id)) {
@@ -248,39 +276,68 @@ function calculateSpending(plan: RetirementPlan, age: number): number {
   }, 0);
 }
 
-function calculateAnnualIncome(plan: RetirementPlan, age: number): AnnualIncome {
-  const { personalDetails } = plan;
-  const employment = plan.income.employment;
-  const secondEmployment = plan.income.secondEmployment;
-  const yearsFromToday = age - personalDetails.currentAge;
+function calculatePersonAnnualIncome(
+  plan: RetirementPlan,
+  personKey: PersonKey,
+  yearsFromToday: number,
+): AnnualIncome {
+  const { income } = plan.people[personKey];
+  const age = income.currentAge + yearsFromToday;
   const inflationFactor =
     (1 + plan.assumptions.inflationRate) ** yearsFromToday;
   const salary =
-    age < employment.workUntilAge
-      ? employment.currentSalary *
-        (1 + employment.annualSalaryGrowthRate) ** yearsFromToday
+    age < income.employment.workUntilAge
+      ? income.employment.currentSalary *
+        (1 + income.employment.annualSalaryGrowthRate) ** yearsFromToday
       : 0;
   const secondSalary =
-    age >= secondEmployment.startAge && age < secondEmployment.endAge
-      ? secondEmployment.currentSalary *
-        (1 + secondEmployment.annualSalaryGrowthRate) ** yearsFromToday
+    age >= income.secondEmployment.startAge &&
+    age < income.secondEmployment.endAge
+      ? income.secondEmployment.currentSalary *
+        (1 + income.secondEmployment.annualSalaryGrowthRate) ** yearsFromToday
       : 0;
   const statePension =
-    age >= personalDetails.statePensionAge
-      ? plan.income.statePension.annualAmount *
-        inflationFactor
+    age >= income.statePensionAge
+      ? income.statePension.annualAmount * inflationFactor
       : 0;
 
   return {
     age,
     salary,
     secondSalary,
-    rental: plan.income.otherIncome.rentalIncome * inflationFactor,
-    other: plan.income.otherIncome.otherIncome * inflationFactor,
+    rental: income.otherIncome.rentalIncome * inflationFactor,
+    other: income.otherIncome.otherIncome * inflationFactor,
     statePension,
   };
 }
 
+function calculateAnnualIncome(
+  plan: RetirementPlan,
+  yearsFromToday: number,
+): Record<PersonKey, AnnualIncome> {
+  const person2Income =
+    plan.personalDetails.householdType === "joint"
+      ? calculatePersonAnnualIncome(plan, "person2", yearsFromToday)
+      : {
+          age: plan.people.person2.income.currentAge + yearsFromToday,
+          salary: 0,
+          secondSalary: 0,
+          rental: 0,
+          other: 0,
+          statePension: 0,
+        };
+  return {
+    person1: calculatePersonAnnualIncome(plan, "person1", yearsFromToday),
+    person2: person2Income,
+  };
+}
+
+function sumAnnualIncome(
+  income: Record<PersonKey, AnnualIncome>,
+  field: "salary" | "secondSalary" | "rental" | "other" | "statePension",
+): number {
+  return income.person1[field] + income.person2[field];
+}
 function calculateMortgageYear(
   mortgageBalance: number,
   plan: RetirementPlan,
@@ -319,9 +376,15 @@ function calculateMortgageYear(
 
 function calculateCurrentNetWorth(plan: RetirementPlan): number {
   const { assets } = plan;
+  const person2Assets =
+    plan.personalDetails.householdType === "joint"
+      ? plan.people.person2.assets.isa.currentValue +
+        plan.people.person2.assets.pension.currentValue
+      : 0;
   return (
-    assets.isa.currentValue +
-    assets.pension.currentValue +
+    plan.people.person1.assets.isa.currentValue +
+    plan.people.person1.assets.pension.currentValue +
+    person2Assets +
     assets.gia.currentValue +
     assets.cash.currentValue +
     assets.otherAssets.currentValue -
@@ -330,7 +393,13 @@ function calculateCurrentNetWorth(plan: RetirementPlan): number {
 }
 
 function calculateInvestedAssets(balances: AccountBalances): number {
-  return balances.isa + balances.pension + balances.gia;
+  return (
+    balances.isa.person1 +
+    balances.isa.person2 +
+    balances.pension.person1 +
+    balances.pension.person2 +
+    balances.gia
+  );
 }
 
 function calculateNetWorth(
@@ -339,8 +408,10 @@ function calculateNetWorth(
   mortgageBalance: number,
 ): number {
   return (
-    balances.isa +
-    balances.pension +
+    balances.isa.person1 +
+    balances.isa.person2 +
+    balances.pension.person1 +
+    balances.pension.person2 +
     balances.gia +
     balances.cash +
     otherAssetsValue -
@@ -353,6 +424,10 @@ function createZeroContributions(): ContributionBreakdown {
     isaContribution: 0,
     pensionContribution: 0,
     giaContribution: 0,
+    byPerson: {
+      person1: { isaContribution: 0, pensionContribution: 0 },
+      person2: { isaContribution: 0, pensionContribution: 0 },
+    },
   };
 }
 
@@ -362,7 +437,43 @@ function createZeroWithdrawals(): WithdrawalBreakdown {
     giaWithdrawal: 0,
     isaWithdrawal: 0,
     pensionWithdrawal: 0,
+    byPerson: {
+      person1: { isaWithdrawal: 0, pensionWithdrawal: 0 },
+      person2: { isaWithdrawal: 0, pensionWithdrawal: 0 },
+    },
   };
+}
+
+function createZeroTaxResult(): TaxResult {
+  return {
+    grossIncome: 0,
+    personalAllowance: 0,
+    taxableIncome: 0,
+    incomeTax: 0,
+    nationalInsurance: 0,
+    capitalGainsTax: 0,
+    totalTax: 0,
+  };
+}
+
+function createZeroPersonIncome(age: number): AnnualPersonIncome {
+  return {
+    age,
+    salaryIncome: 0,
+    secondSalaryIncome: 0,
+    rentalIncome: 0,
+    otherIncomeAmount: 0,
+    statePensionIncome: 0,
+    interestIncome: 0,
+    dividendIncome: 0,
+    pensionDrawdownIncome: 0,
+    realizedCapitalGains: 0,
+    totalIncome: 0,
+  };
+}
+
+function sumPersonValues(values: Record<PersonKey, number>): number {
+  return values.person1 + values.person2;
 }
 
 function createSnapshot(
@@ -372,6 +483,7 @@ function createSnapshot(
   balances: AccountBalances,
   otherAssetsValue: number,
   mortgageBalance: number,
+  personAges: Record<PersonKey, number>,
   values: Partial<ProjectionYear> = {},
 ): ProjectionYear {
   return {
@@ -388,7 +500,15 @@ function createSnapshot(
     pensionDrawdownIncome: 0,
     realizedCapitalGains: 0,
     totalIncome: 0,
-    tax: { incomeTax: 0, nationalInsurance: 0, capitalGainsTax: 0, totalTax: 0 },
+    tax: createZeroTaxResult(),
+    personIncomes: {
+      person1: createZeroPersonIncome(personAges.person1),
+      person2: createZeroPersonIncome(personAges.person2),
+    },
+    personTaxes: {
+      person1: createZeroTaxResult(),
+      person2: createZeroTaxResult(),
+    },
     spending: 0,
     mortgagePayment: 0,
     mortgageBalance,
@@ -397,8 +517,10 @@ function createSnapshot(
     unfundedShortfall: 0,
     investmentGrowth: 0,
     netCashflow: 0,
-    isaValue: balances.isa,
-    pensionValue: balances.pension,
+    isaValue: sumPersonValues(balances.isa),
+    pensionValue: sumPersonValues(balances.pension),
+    personIsaValues: { ...balances.isa },
+    personPensionValues: { ...balances.pension },
     giaValue: balances.gia,
     giaCostBasis: balances.giaCostBasis,
     cashValue: balances.cash,
@@ -418,11 +540,22 @@ function calculateInvestmentGrowth(
   assumptions: Assumptions,
 ): { balances: AccountBalances; income: InvestmentIncome } {
   const inflation = assumptions.inflationRate;
-  const isaGrowth =
-    balances.isa * realYieldToNominal(assumptions.isaRealReturn, inflation);
-  const pensionGrowth =
-    balances.pension *
-    realYieldToNominal(assumptions.pensionRealReturn, inflation);
+  const isaGrowth: Record<PersonKey, number> = {
+    person1:
+      balances.isa.person1 *
+      realYieldToNominal(assumptions.isaRealReturn, inflation),
+    person2:
+      balances.isa.person2 *
+      realYieldToNominal(assumptions.isaRealReturn, inflation),
+  };
+  const pensionGrowth: Record<PersonKey, number> = {
+    person1:
+      balances.pension.person1 *
+      realYieldToNominal(assumptions.pensionRealReturn, inflation),
+    person2:
+      balances.pension.person2 *
+      realYieldToNominal(assumptions.pensionRealReturn, inflation),
+  };
   const giaInterest =
     balances.gia *
     realYieldToNominal(assumptions.giaInterestRealYield, inflation);
@@ -439,8 +572,14 @@ function calculateInvestmentGrowth(
 
   return {
     balances: {
-      isa: balances.isa + isaGrowth,
-      pension: balances.pension + pensionGrowth,
+      isa: {
+        person1: balances.isa.person1 + isaGrowth.person1,
+        person2: balances.isa.person2 + isaGrowth.person2,
+      },
+      pension: {
+        person1: balances.pension.person1 + pensionGrowth.person1,
+        person2: balances.pension.person2 + pensionGrowth.person2,
+      },
       gia: Math.max(0, balances.gia + giaCapitalGrowth),
       giaCostBasis: balances.giaCostBasis,
       cash: balances.cash,
@@ -450,8 +589,8 @@ function calculateInvestmentGrowth(
       dividends: giaDividends,
       capitalGrowth: giaCapitalGrowth,
       totalGrowth:
-        isaGrowth +
-        pensionGrowth +
+        sumPersonValues(isaGrowth) +
+        sumPersonValues(pensionGrowth) +
         giaCapitalGrowth +
         interestIncome +
         giaDividends,
@@ -463,37 +602,93 @@ function addContributions(
   balances: AccountBalances,
   plan: RetirementPlan,
   availableCashflow: number,
-  isEmployed: boolean,
+  annualIncome: Record<PersonKey, AnnualIncome>,
 ): { balances: AccountBalances; contributions: ContributionBreakdown } {
-  if (!isEmployed || availableCashflow <= 0) {
+  const isWorking = {
+    person1:
+      annualIncome.person1.salary > 0 ||
+      annualIncome.person1.secondSalary > 0,
+    person2:
+      annualIncome.person2.salary > 0 ||
+      annualIncome.person2.secondSalary > 0,
+  };
+  if ((!isWorking.person1 && !isWorking.person2) || availableCashflow <= 0) {
     return { balances, contributions: createZeroContributions() };
   }
 
-  const scheduledContributions = {
-    isaContribution: plan.assets.isa.monthlyContribution * MONTHS_PER_YEAR,
-    pensionContribution:
-      plan.assets.pension.monthlyContribution * MONTHS_PER_YEAR,
-    giaContribution: plan.assets.gia.monthlyContribution * MONTHS_PER_YEAR,
+  const scheduledByPerson = {
+    person1: {
+      isaContribution: isWorking.person1
+        ? plan.people.person1.assets.isa.monthlyContribution * MONTHS_PER_YEAR
+        : 0,
+      pensionContribution: isWorking.person1
+        ? plan.people.person1.assets.pension.monthlyContribution * MONTHS_PER_YEAR
+        : 0,
+    },
+    person2: {
+      isaContribution: isWorking.person2
+        ? plan.people.person2.assets.isa.monthlyContribution * MONTHS_PER_YEAR
+        : 0,
+      pensionContribution: isWorking.person2
+        ? plan.people.person2.assets.pension.monthlyContribution * MONTHS_PER_YEAR
+        : 0,
+    },
   };
-  const scheduledTotal = Object.values(scheduledContributions).reduce(
-    (total, amount) => total + amount,
-    0,
-  );
+  const giaContribution =
+    plan.assets.gia.monthlyContribution * MONTHS_PER_YEAR;
+  const scheduledTotal =
+    scheduledByPerson.person1.isaContribution +
+    scheduledByPerson.person1.pensionContribution +
+    scheduledByPerson.person2.isaContribution +
+    scheduledByPerson.person2.pensionContribution +
+    giaContribution;
   if (scheduledTotal === 0) {
-    return { balances, contributions: scheduledContributions };
+    return { balances, contributions: createZeroContributions() };
   }
 
   const scale = Math.min(1, availableCashflow / scheduledTotal);
   const contributions: ContributionBreakdown = {
-    isaContribution: scheduledContributions.isaContribution * scale,
-    pensionContribution: scheduledContributions.pensionContribution * scale,
-    giaContribution: scheduledContributions.giaContribution * scale,
+    isaContribution:
+      (scheduledByPerson.person1.isaContribution +
+        scheduledByPerson.person2.isaContribution) *
+      scale,
+    pensionContribution:
+      (scheduledByPerson.person1.pensionContribution +
+        scheduledByPerson.person2.pensionContribution) *
+      scale,
+    giaContribution: giaContribution * scale,
+    byPerson: {
+      person1: {
+        isaContribution: scheduledByPerson.person1.isaContribution * scale,
+        pensionContribution:
+          scheduledByPerson.person1.pensionContribution * scale,
+      },
+      person2: {
+        isaContribution: scheduledByPerson.person2.isaContribution * scale,
+        pensionContribution:
+          scheduledByPerson.person2.pensionContribution * scale,
+      },
+    },
   };
 
   return {
     balances: {
-      isa: balances.isa + contributions.isaContribution,
-      pension: balances.pension + contributions.pensionContribution,
+      isa: {
+        person1:
+          balances.isa.person1 +
+          contributions.byPerson.person1.isaContribution,
+        person2:
+          balances.isa.person2 +
+          contributions.byPerson.person2.isaContribution,
+      },
+      pension: {
+        person1:
+          balances.pension.person1 +
+          contributions.byPerson.person1.pensionContribution,
+        person2:
+          balances.pension.person2 +
+          contributions.byPerson.person2.pensionContribution,
+      },
       gia: balances.gia + contributions.giaContribution,
       giaCostBasis: balances.giaCostBasis + contributions.giaContribution,
       cash: balances.cash,
@@ -508,32 +703,47 @@ function withdrawFromSource(
   balances: AccountBalances,
   withdrawals: WithdrawalBreakdown,
 ): { remaining: number; realizedCapitalGain: number } {
-  const available = balances[source];
-  const amount = Math.min(available, requestedAmount);
-  balances[source] = Math.max(0, available - amount);
-  let realizedCapitalGain = 0;
+  if (source === "isa" || source === "pension") {
+    const account = balances[source];
+    const available = account.person1 + account.person2;
+    const amount = Math.min(available, requestedAmount);
+    const person1Amount =
+      available > MONEY_EPSILON
+        ? amount * (account.person1 / available)
+        : 0;
+    const person2Amount = Math.min(account.person2, amount - person1Amount);
+    account.person1 = Math.max(0, account.person1 - person1Amount);
+    account.person2 = Math.max(0, account.person2 - person2Amount);
+    const personWithdrawalKey =
+      source === "isa" ? "isaWithdrawal" : "pensionWithdrawal";
+    withdrawals.byPerson.person1[personWithdrawalKey] += person1Amount;
+    withdrawals.byPerson.person2[personWithdrawalKey] += person2Amount;
+    withdrawals[personWithdrawalKey] += person1Amount + person2Amount;
+    return {
+      remaining: requestedAmount - person1Amount - person2Amount,
+      realizedCapitalGain: 0,
+    };
+  }
 
-  if (source === "gia" && available > MONEY_EPSILON) {
+  const available = source === "cash" ? balances.cash : balances.gia;
+  const amount = Math.min(available, requestedAmount);
+  if (source === "cash") {
+    balances.cash = Math.max(0, balances.cash - amount);
+    withdrawals.cashWithdrawal += amount;
+    return {
+      remaining: requestedAmount - amount,
+      realizedCapitalGain: 0,
+    };
+  }
+
+  balances.gia = Math.max(0, balances.gia - amount);
+  let realizedCapitalGain = 0;
+  if (available > MONEY_EPSILON) {
     const costBasisSold = balances.giaCostBasis * (amount / available);
     realizedCapitalGain = amount - costBasisSold;
     balances.giaCostBasis = Math.max(0, balances.giaCostBasis - costBasisSold);
   }
-
-  switch (source) {
-    case "cash":
-      withdrawals.cashWithdrawal += amount;
-      break;
-    case "gia":
-      withdrawals.giaWithdrawal += amount;
-      break;
-    case "isa":
-      withdrawals.isaWithdrawal += amount;
-      break;
-    case "pension":
-      withdrawals.pensionWithdrawal += amount;
-      break;
-  }
-
+  withdrawals.giaWithdrawal += amount;
   return {
     remaining: requestedAmount - amount,
     realizedCapitalGain,
@@ -543,25 +753,98 @@ function withdrawFromSource(
 function createTaxInputs(
   plan: RetirementPlan,
   taxYear: number,
-  annualIncome: AnnualIncome,
+  personKey: PersonKey,
+  annualIncome: Record<PersonKey, AnnualIncome>,
   investmentIncome: InvestmentIncome,
   withdrawals: WithdrawalBreakdown,
   realizedCapitalGains: number,
 ): TaxInputs {
+  const personIncome = annualIncome[personKey];
+  const taxableInvestments = personKey === "person1";
   return {
     taxYear,
     inflationRate: plan.assumptions.inflationRate,
     jurisdiction: plan.taxSettings.jurisdiction,
-    age: annualIncome.age,
-    statePensionAge: plan.personalDetails.statePensionAge,
-    employmentIncomes: [annualIncome.salary, annualIncome.secondSalary],
-    rentalProfit: annualIncome.rental,
-    otherTaxableIncome: annualIncome.other,
-    pensionIncome: withdrawals.pensionWithdrawal,
-    statePensionIncome: annualIncome.statePension,
-    savingsInterest: Math.max(0, investmentIncome.interest),
-    dividendIncome: Math.max(0, investmentIncome.dividends),
-    capitalGains: realizedCapitalGains,
+    age: personIncome.age,
+    statePensionAge: plan.people[personKey].income.statePensionAge,
+    employmentIncomes: [personIncome.salary, personIncome.secondSalary],
+    rentalProfit: personIncome.rental,
+    otherTaxableIncome: personIncome.other,
+    pensionIncome: withdrawals.byPerson[personKey].pensionWithdrawal,
+    statePensionIncome: personIncome.statePension,
+    savingsInterest: taxableInvestments
+      ? Math.max(0, investmentIncome.interest)
+      : 0,
+    dividendIncome: taxableInvestments
+      ? Math.max(0, investmentIncome.dividends)
+      : 0,
+    capitalGains: taxableInvestments ? realizedCapitalGains : 0,
+  };
+}
+
+function calculatePersonTaxes(
+  plan: RetirementPlan,
+  taxYear: number,
+  annualIncome: Record<PersonKey, AnnualIncome>,
+  investmentIncome: InvestmentIncome,
+  withdrawals: WithdrawalBreakdown,
+  realizedCapitalGains: number,
+): Record<PersonKey, TaxResult> {
+  const person1 = calculateUkTax(
+    createTaxInputs(
+      plan,
+      taxYear,
+      "person1",
+      annualIncome,
+      investmentIncome,
+      withdrawals,
+      realizedCapitalGains,
+    ),
+  );
+  const person2 =
+    plan.personalDetails.householdType === "joint"
+      ? calculateUkTax(
+          createTaxInputs(
+            plan,
+            taxYear,
+            "person2",
+            annualIncome,
+            investmentIncome,
+            withdrawals,
+            realizedCapitalGains,
+          ),
+        )
+      : createZeroTaxResult();
+  return { person1, person2 };
+}
+
+function combineTaxes(
+  personTaxes: Record<PersonKey, TaxResult>,
+): TaxResult {
+  return {
+    grossIncome:
+      personTaxes.person1.grossIncome + personTaxes.person2.grossIncome,
+    personalAllowance:
+      personTaxes.person1.personalAllowance +
+      personTaxes.person2.personalAllowance,
+    taxableIncome:
+      personTaxes.person1.taxableIncome + personTaxes.person2.taxableIncome,
+    incomeTax: personTaxes.person1.incomeTax + personTaxes.person2.incomeTax,
+    nationalInsurance:
+      personTaxes.person1.nationalInsurance +
+      personTaxes.person2.nationalInsurance,
+    capitalGainsTax:
+      personTaxes.person1.capitalGainsTax +
+      personTaxes.person2.capitalGainsTax,
+    totalTax: personTaxes.person1.totalTax + personTaxes.person2.totalTax,
+  };
+}
+
+function cloneAccountBalances(balances: AccountBalances): AccountBalances {
+  return {
+    ...balances,
+    isa: { ...balances.isa },
+    pension: { ...balances.pension },
   };
 }
 
@@ -569,6 +852,7 @@ interface WithdrawalEvaluation {
   balances: AccountBalances;
   withdrawals: WithdrawalBreakdown;
   realizedCapitalGains: number;
+  personTaxes: Record<PersonKey, TaxResult>;
   tax: TaxResult;
   totalWithdrawn: number;
   netFunds: number;
@@ -577,13 +861,13 @@ interface WithdrawalEvaluation {
 function evaluateWithdrawals(
   plan: RetirementPlan,
   taxYear: number,
-  annualIncome: AnnualIncome,
+  annualIncome: Record<PersonKey, AnnualIncome>,
   investmentIncome: InvestmentIncome,
   balancesBeforeWithdrawals: AccountBalances,
   withdrawalOrder: WithdrawalSource[],
   requestedAmount: number,
 ): WithdrawalEvaluation {
-  const balances = { ...balancesBeforeWithdrawals };
+  const balances = cloneAccountBalances(balancesBeforeWithdrawals);
   const withdrawals = createZeroWithdrawals();
   let remaining = requestedAmount;
   let realizedCapitalGains = 0;
@@ -607,22 +891,26 @@ function evaluateWithdrawals(
     withdrawals.giaWithdrawal +
     withdrawals.isaWithdrawal +
     withdrawals.pensionWithdrawal;
-  const tax = calculateUkTax(
-    createTaxInputs(
-      plan,
-      taxYear,
-      annualIncome,
-      investmentIncome,
-      withdrawals,
-      realizedCapitalGains,
-    ),
+  const personTaxes = calculatePersonTaxes(
+    plan,
+    taxYear,
+    annualIncome,
+    investmentIncome,
+    withdrawals,
+    realizedCapitalGains,
   );
+  const tax = combineTaxes(personTaxes);
   const recurringIncome =
-    annualIncome.salary +
-    annualIncome.secondSalary +
-    annualIncome.rental +
-    annualIncome.other +
-    annualIncome.statePension +
+    Object.values(annualIncome).reduce(
+      (total, income) =>
+        total +
+        income.salary +
+        income.secondSalary +
+        income.rental +
+        income.other +
+        income.statePension,
+      0,
+    ) +
     investmentIncome.interest +
     investmentIncome.dividends;
 
@@ -630,9 +918,41 @@ function evaluateWithdrawals(
     balances,
     withdrawals,
     realizedCapitalGains,
+    personTaxes,
     tax,
     totalWithdrawn,
     netFunds: recurringIncome + totalWithdrawn - tax.totalTax,
+  };
+}
+
+function createPersonProjectionIncome(
+  income: AnnualIncome,
+  interestIncome: number,
+  dividendIncome: number,
+  pensionDrawdownIncome: number,
+  realizedCapitalGains: number,
+): AnnualPersonIncome {
+  const totalIncome =
+    income.salary +
+    income.secondSalary +
+    income.rental +
+    income.other +
+    income.statePension +
+    interestIncome +
+    dividendIncome +
+    pensionDrawdownIncome;
+  return {
+    age: income.age,
+    salaryIncome: income.salary,
+    secondSalaryIncome: income.secondSalary,
+    rentalIncome: income.rental,
+    otherIncomeAmount: income.other,
+    statePensionIncome: income.statePension,
+    interestIncome,
+    dividendIncome,
+    pensionDrawdownIncome,
+    realizedCapitalGains,
+    totalIncome,
   };
 }
 
@@ -646,11 +966,14 @@ function simulateYear(
   // Returns apply to opening balances; scheduled contributions are added at year-end.
   const growthResult = calculateInvestmentGrowth(openingBalances, assumptions);
   const balancesAfterGrowth = growthResult.balances;
-  const annualIncome = calculateAnnualIncome(plan, periodStartAge);
+  const annualIncome = calculateAnnualIncome(
+    plan,
+    periodStartAge - plan.people.person1.income.currentAge,
+  );
   const taxYear =
     CURRENT_UK_TAX_YEAR +
     periodStartAge -
-    plan.personalDetails.currentAge;
+    plan.people.person1.income.currentAge;
   const mortgageYear = calculateMortgageYear(
     openingMortgageBalance,
     plan,
@@ -658,29 +981,26 @@ function simulateYear(
   );
   const spending = calculateSpending(plan, periodStartAge);
   const recurringIncome =
-    annualIncome.salary +
-    annualIncome.secondSalary +
-    annualIncome.rental +
-    annualIncome.other +
-    annualIncome.statePension +
+    sumAnnualIncome(annualIncome, "salary") +
+    sumAnnualIncome(annualIncome, "secondSalary") +
+    sumAnnualIncome(annualIncome, "rental") +
+    sumAnnualIncome(annualIncome, "other") +
+    sumAnnualIncome(annualIncome, "statePension") +
     growthResult.income.interest +
     growthResult.income.dividends;
   const zeroWithdrawals = createZeroWithdrawals();
-  const baseTax = calculateUkTax(
-    createTaxInputs(
-      plan,
-      taxYear,
-      annualIncome,
-      growthResult.income,
-      zeroWithdrawals,
-      0,
-    ),
+  let personTaxes = calculatePersonTaxes(
+    plan,
+    taxYear,
+    annualIncome,
+    growthResult.income,
+    zeroWithdrawals,
+    0,
   );
+  const baseTax = combineTaxes(personTaxes);
   const spendingAndMortgage = spending + mortgageYear.payment;
   const netCashflowBeforeWithdrawals =
     recurringIncome - baseTax.totalTax - spendingAndMortgage;
-  const isEmployed =
-    annualIncome.salary > 0 || annualIncome.secondSalary > 0;
   let contributionBreakdown = createZeroContributions();
   let withdrawals = zeroWithdrawals;
   let realizedCapitalGains = 0;
@@ -694,7 +1014,7 @@ function simulateYear(
       balancesAfterGrowth,
       plan,
       netCashflowBeforeWithdrawals,
-      isEmployed,
+      annualIncome,
     );
     balances = contributionResult.balances;
     contributionBreakdown = contributionResult.contributions;
@@ -707,8 +1027,8 @@ function simulateYear(
     const availableAssets =
       balancesAfterGrowth.cash +
       balancesAfterGrowth.gia +
-      balancesAfterGrowth.isa +
-      balancesAfterGrowth.pension;
+      sumPersonValues(balancesAfterGrowth.isa) +
+      sumPersonValues(balancesAfterGrowth.pension);
     const requiredNetFunds = spendingAndMortgage;
     let high = availableAssets;
     const highEvaluation = evaluateWithdrawals(
@@ -754,8 +1074,12 @@ function simulateYear(
     balances = evaluation.balances;
     withdrawals = evaluation.withdrawals;
     realizedCapitalGains = evaluation.realizedCapitalGains;
+    personTaxes = evaluation.personTaxes;
     tax = evaluation.tax;
-    pensionDrawdownIncome = withdrawals.pensionWithdrawal;
+    pensionDrawdownIncome = sumPersonValues({
+      person1: withdrawals.byPerson.person1.pensionWithdrawal,
+      person2: withdrawals.byPerson.person2.pensionWithdrawal,
+    });
     unfundedShortfall = Math.max(0, requiredNetFunds - evaluation.netFunds);
   }
 
@@ -781,21 +1105,42 @@ function simulateYear(
     accountValues,
     plan.assets.otherAssets.currentValue,
     mortgageYear.balance,
+    {
+      person1: annualIncome.person1.age + 1,
+      person2: annualIncome.person2.age + 1,
+    },
   );
 
   return {
     ...snapshot,
-    salaryIncome: annualIncome.salary,
-    secondSalaryIncome: annualIncome.secondSalary,
-    rentalIncome: annualIncome.rental,
-    otherIncome: annualIncome.other,
-    statePensionIncome: annualIncome.statePension,
+    salaryIncome: sumAnnualIncome(annualIncome, "salary"),
+    secondSalaryIncome: sumAnnualIncome(annualIncome, "secondSalary"),
+    rentalIncome: sumAnnualIncome(annualIncome, "rental"),
+    otherIncome: sumAnnualIncome(annualIncome, "other"),
+    statePensionIncome: sumAnnualIncome(annualIncome, "statePension"),
     interestIncome: growthResult.income.interest,
     dividendIncome: growthResult.income.dividends,
     pensionDrawdownIncome,
     realizedCapitalGains,
     totalIncome,
     tax,
+    personIncomes: {
+      person1: createPersonProjectionIncome(
+        annualIncome.person1,
+        growthResult.income.interest,
+        growthResult.income.dividends,
+        withdrawals.byPerson.person1.pensionWithdrawal,
+        realizedCapitalGains,
+      ),
+      person2: createPersonProjectionIncome(
+        annualIncome.person2,
+        0,
+        0,
+        withdrawals.byPerson.person2.pensionWithdrawal,
+        0,
+      ),
+    },
+    personTaxes,
     spending,
     mortgagePayment: mortgageYear.payment,
     contributions: contributionBreakdown,
@@ -818,33 +1163,48 @@ function calculateFinancialIndependenceAge(
       plan,
       age,
     ).payment;
-    const income = calculateAnnualIncome(plan, age);
-    const projectionYear = yearlyResults.find((result) => result.age === age);
-    if (!projectionYear) {
-      continue;
-    }
-    const nonEmploymentTax = calculateUkTax({
-      taxYear: projectionYear.taxYear,
-      inflationRate: plan.assumptions.inflationRate,
-      jurisdiction: plan.taxSettings.jurisdiction,
-      age,
-      statePensionAge: plan.personalDetails.statePensionAge,
-      employmentIncomes: [],
-      rentalProfit: income.rental,
-      otherTaxableIncome: income.other,
-      pensionIncome: 0,
-      statePensionIncome: income.statePension,
-      savingsInterest: Math.max(0, projectionYear.interestIncome),
-      dividendIncome: Math.max(0, projectionYear.dividendIncome),
-      capitalGains: 0,
-    });
+    const projectionYear = year;
+    const nonEmploymentIncomeByPerson: Record<PersonKey, AnnualIncome> = {
+      person1: {
+        age: year.personIncomes.person1.age,
+        rental: year.personIncomes.person1.rentalIncome,
+        other: year.personIncomes.person1.otherIncomeAmount,
+        statePension: year.personIncomes.person1.statePensionIncome,
+        salary: 0,
+        secondSalary: 0,
+      },
+      person2: {
+        age: year.personIncomes.person2.age,
+        rental: year.personIncomes.person2.rentalIncome,
+        other: year.personIncomes.person2.otherIncomeAmount,
+        statePension: year.personIncomes.person2.statePensionIncome,
+        salary: 0,
+        secondSalary: 0,
+      },
+    };
+    const zeroWithdrawals = createZeroWithdrawals();
+    const nonEmploymentTaxes = combineTaxes(
+      calculatePersonTaxes(
+        plan,
+        projectionYear.taxYear,
+        nonEmploymentIncomeByPerson,
+        {
+          interest: projectionYear.interestIncome,
+          dividends: projectionYear.dividendIncome,
+          capitalGrowth: 0,
+          totalGrowth: 0,
+        },
+        zeroWithdrawals,
+        0,
+      ),
+    );
     const nonEmploymentIncome =
-      income.rental +
-      income.other +
-      income.statePension +
+      sumAnnualIncome(nonEmploymentIncomeByPerson, "rental") +
+      sumAnnualIncome(nonEmploymentIncomeByPerson, "other") +
+      sumAnnualIncome(nonEmploymentIncomeByPerson, "statePension") +
       projectionYear.interestIncome +
       projectionYear.dividendIncome -
-      nonEmploymentTax.totalTax;
+      nonEmploymentTaxes.totalTax;
     const annualSpendingGap = Math.max(
       0,
       spending + mortgagePayment - nonEmploymentIncome,
@@ -918,20 +1278,36 @@ export function calculateProjection(
   validateRetirementPlan(plan);
   const effectiveAssumptions = applyScenario(plan.assumptions, scenario);
   const balances: AccountBalances = {
-    isa: plan.assets.isa.currentValue,
-    pension: plan.assets.pension.currentValue,
+    isa: {
+      person1: plan.people.person1.assets.isa.currentValue,
+      person2:
+        plan.personalDetails.householdType === "joint"
+          ? plan.people.person2.assets.isa.currentValue
+          : 0,
+    },
+    pension: {
+      person1: plan.people.person1.assets.pension.currentValue,
+      person2:
+        plan.personalDetails.householdType === "joint"
+          ? plan.people.person2.assets.pension.currentValue
+          : 0,
+    },
     gia: plan.assets.gia.currentValue,
     giaCostBasis: plan.assets.gia.costBasis,
     cash: plan.assets.cash.currentValue,
   };
   const yearlyResults: ProjectionYear[] = [
     createSnapshot(
-      plan.personalDetails.currentAge,
-      plan.personalDetails.currentAge,
+      plan.people.person1.income.currentAge,
+      plan.people.person1.income.currentAge,
       CURRENT_UK_TAX_YEAR,
       balances,
       plan.assets.otherAssets.currentValue,
       plan.assets.mortgage.outstandingBalance,
+      {
+        person1: plan.people.person1.income.currentAge,
+        person2: plan.people.person2.income.currentAge,
+      },
     ),
   ];
 
@@ -939,7 +1315,7 @@ export function calculateProjection(
   let currentMortgageBalance = plan.assets.mortgage.outstandingBalance;
 
   for (
-    let age = plan.personalDetails.currentAge;
+    let age = plan.people.person1.income.currentAge;
     age < plan.personalDetails.lifeExpectancy;
     age += 1
   ) {
@@ -952,8 +1328,8 @@ export function calculateProjection(
     );
     yearlyResults.push(year);
     currentBalances = {
-      isa: year.isaValue,
-      pension: year.pensionValue,
+      isa: year.personIsaValues,
+      pension: year.personPensionValues,
       gia: year.giaValue,
       giaCostBasis: year.giaCostBasis,
       cash: year.cashValue,

@@ -9,15 +9,11 @@ export const SCENARIO_OPTIONS: readonly Scenario[] = [
 export function createSampleRetirementPlan(): RetirementPlan {
   return {
     personalDetails: {
-      currentAge: 45,
       retirementAge: 67,
       lifeExpectancy: 95,
-      statePensionAge: 67,
       householdType: "single",
     },
     assets: {
-      isa: { currentValue: 85_000, monthlyContribution: 500 },
-      pension: { currentValue: 220_000, monthlyContribution: 1_200 },
       gia: { currentValue: 40_000, costBasis: 40_000, monthlyContribution: 100 },
       cash: { currentValue: 25_000 },
       otherAssets: { currentValue: 20_000 },
@@ -28,24 +24,62 @@ export function createSampleRetirementPlan(): RetirementPlan {
         mortgageEndAge: 60,
       },
     },
-    income: {
-      employment: {
-        currentSalary: 65_000,
-        annualSalaryGrowthRate: 0.03,
-        workUntilAge: 67,
+    people: {
+      person1: {
+        income: {
+          currentAge: 45,
+          statePensionAge: 67,
+          employment: {
+            currentSalary: 65_000,
+            annualSalaryGrowthRate: 0.03,
+            workUntilAge: 67,
+          },
+          secondEmployment: {
+            currentSalary: 0,
+            annualSalaryGrowthRate: 0,
+            startAge: 45,
+            endAge: 67,
+          },
+          otherIncome: {
+            rentalIncome: 0,
+            otherIncome: 0,
+          },
+          statePension: {
+            annualAmount: 11_973,
+          },
+        },
+        assets: {
+          isa: { currentValue: 85_000, monthlyContribution: 500 },
+          pension: { currentValue: 220_000, monthlyContribution: 1_200 },
+        },
       },
-      secondEmployment: {
-        currentSalary: 0,
-        annualSalaryGrowthRate: 0,
-        startAge: 45,
-        endAge: 67,
-      },
-      otherIncome: {
-        rentalIncome: 0,
-        otherIncome: 0,
-      },
-      statePension: {
-        annualAmount: 11_973,
+      person2: {
+        income: {
+          currentAge: 43,
+          statePensionAge: 67,
+          employment: {
+            currentSalary: 0,
+            annualSalaryGrowthRate: 0,
+            workUntilAge: 67,
+          },
+          secondEmployment: {
+            currentSalary: 0,
+            annualSalaryGrowthRate: 0,
+            startAge: 43,
+            endAge: 67,
+          },
+          otherIncome: {
+            rentalIncome: 0,
+            otherIncome: 0,
+          },
+          statePension: {
+            annualAmount: 0,
+          },
+        },
+        assets: {
+          isa: { currentValue: 0, monthlyContribution: 0 },
+          pension: { currentValue: 0, monthlyContribution: 0 },
+        },
       },
     },
     spending: {

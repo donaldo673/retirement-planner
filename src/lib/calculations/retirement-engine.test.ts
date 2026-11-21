@@ -9,9 +9,14 @@ test("projection includes an opening snapshot and all ages through life expectan
 
   assert.equal(
     projection.yearlyResults.length,
-    plan.personalDetails.lifeExpectancy - plan.personalDetails.currentAge + 1,
+    plan.personalDetails.lifeExpectancy -
+      plan.people.person1.income.currentAge +
+      1,
   );
-  assert.equal(projection.yearlyResults[0].age, plan.personalDetails.currentAge);
+  assert.equal(
+    projection.yearlyResults[0].age,
+    plan.people.person1.income.currentAge,
+  );
   assert.equal(
     projection.yearlyResults[0].netWorth,
     projection.summary.currentNetWorth,
@@ -25,14 +30,14 @@ test("projection includes an opening snapshot and all ages through life expectan
 test("deficits use the configured withdrawal order and report any shortfall", () => {
   const plan = createSampleRetirementPlan();
   plan.personalDetails = {
-    currentAge: 65,
     retirementAge: 66,
     lifeExpectancy: 68,
-    statePensionAge: 120,
     householdType: "single",
   };
-  plan.assets.isa = { currentValue: 0, monthlyContribution: 0 };
-  plan.assets.pension = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.income.currentAge = 65;
+  plan.people.person1.income.statePensionAge = 120;
+  plan.people.person1.assets.isa = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.assets.pension = { currentValue: 0, monthlyContribution: 0 };
   plan.assets.gia = { currentValue: 500, costBasis: 500, monthlyContribution: 0 };
   plan.assets.cash = { currentValue: 1_000 };
   plan.assets.otherAssets = { currentValue: 0 };
@@ -42,13 +47,13 @@ test("deficits use the configured withdrawal order and report any shortfall", ()
     monthlyPayment: 0,
     mortgageEndAge: 68,
   };
-  plan.income.employment = {
+  plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
     workUntilAge: 65,
   };
-  plan.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
-  plan.income.statePension = { annualAmount: 0 };
+  plan.people.person1.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
+  plan.people.person1.income.statePension = { annualAmount: 0 };
   plan.spending.buckets = [
     {
       id: "essential",
@@ -82,14 +87,14 @@ test("deficits use the configured withdrawal order and report any shortfall", ()
 test("mortgage maturity clears the remaining balance and charges the payoff", () => {
   const plan = createSampleRetirementPlan();
   plan.personalDetails = {
-    currentAge: 65,
     retirementAge: 66,
     lifeExpectancy: 67,
-    statePensionAge: 120,
     householdType: "single",
   };
-  plan.assets.isa = { currentValue: 0, monthlyContribution: 0 };
-  plan.assets.pension = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.income.currentAge = 65;
+  plan.people.person1.income.statePensionAge = 120;
+  plan.people.person1.assets.isa = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.assets.pension = { currentValue: 0, monthlyContribution: 0 };
   plan.assets.gia = { currentValue: 0, costBasis: 0, monthlyContribution: 0 };
   plan.assets.cash = { currentValue: 2_000 };
   plan.assets.otherAssets = { currentValue: 0 };
@@ -99,13 +104,13 @@ test("mortgage maturity clears the remaining balance and charges the payoff", ()
     monthlyPayment: 100,
     mortgageEndAge: 66,
   };
-  plan.income.employment = {
+  plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
     workUntilAge: 65,
   };
-  plan.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
-  plan.income.statePension = { annualAmount: 0 };
+  plan.people.person1.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
+  plan.people.person1.income.statePension = { annualAmount: 0 };
   plan.spending.buckets = [];
   plan.assumptions = {
     isaRealReturn: 0,
@@ -135,25 +140,28 @@ test("scenarios adjust returns without mutating plan assumptions", () => {
 test("non-salary income is uprated with inflation from the current age", () => {
   const plan = createSampleRetirementPlan();
   plan.personalDetails = {
-    currentAge: 65,
     retirementAge: 66,
     lifeExpectancy: 67,
-    statePensionAge: 66,
     householdType: "single",
   };
+  plan.people.person1.income.currentAge = 65;
+  plan.people.person1.income.statePensionAge = 66;
   plan.assets.mortgage = {
     outstandingBalance: 0,
     interestRate: 0,
     monthlyPayment: 0,
     mortgageEndAge: 67,
   };
-  plan.income.employment = {
+  plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
     workUntilAge: 65,
   };
-  plan.income.otherIncome = { rentalIncome: 100, otherIncome: 100 };
-  plan.income.statePension = { annualAmount: 100 };
+  plan.people.person1.income.otherIncome = {
+    rentalIncome: 100,
+    otherIncome: 100,
+  };
+  plan.people.person1.income.statePension = { annualAmount: 100 };
   plan.spending.buckets = [];
   plan.assumptions = {
     isaRealReturn: 0,
@@ -176,14 +184,14 @@ test("non-salary income is uprated with inflation from the current age", () => {
 test("final estate below £50,000 is amber; exactly £50,000 is green", () => {
   const plan = createSampleRetirementPlan();
   plan.personalDetails = {
-    currentAge: 65,
     retirementAge: 66,
     lifeExpectancy: 67,
-    statePensionAge: 120,
     householdType: "single",
   };
-  plan.assets.isa = { currentValue: 0, monthlyContribution: 0 };
-  plan.assets.pension = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.income.currentAge = 65;
+  plan.people.person1.income.statePensionAge = 120;
+  plan.people.person1.assets.isa = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.assets.pension = { currentValue: 0, monthlyContribution: 0 };
   plan.assets.gia = { currentValue: 0, costBasis: 0, monthlyContribution: 0 };
   plan.assets.cash = { currentValue: 49_999 };
   plan.assets.otherAssets = { currentValue: 0 };
@@ -193,13 +201,13 @@ test("final estate below £50,000 is amber; exactly £50,000 is green", () => {
     monthlyPayment: 0,
     mortgageEndAge: 67,
   };
-  plan.income.employment = {
+  plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
     workUntilAge: 65,
   };
-  plan.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
-  plan.income.statePension = { annualAmount: 0 };
+  plan.people.person1.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
+  plan.people.person1.income.statePension = { annualAmount: 0 };
   plan.spending.buckets = [];
   plan.assumptions = {
     isaRealReturn: 0,
@@ -218,7 +226,7 @@ test("final estate below £50,000 is amber; exactly £50,000 is green", () => {
 
 test("invalid age ordering is rejected", () => {
   const plan = createSampleRetirementPlan();
-  plan.personalDetails.retirementAge = plan.personalDetails.currentAge;
+  plan.personalDetails.retirementAge = plan.people.person1.income.currentAge;
 
   assert.throws(() => calculateProjection(plan), /current age < retirement age/);
 });
@@ -226,14 +234,14 @@ test("invalid age ordering is rejected", () => {
 test("second employment and generated investment income flow through tax", () => {
   const plan = createSampleRetirementPlan();
   plan.personalDetails = {
-    currentAge: 40,
     retirementAge: 41,
     lifeExpectancy: 42,
-    statePensionAge: 120,
     householdType: "single",
   };
-  plan.assets.isa = { currentValue: 0, monthlyContribution: 0 };
-  plan.assets.pension = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.income.currentAge = 40;
+  plan.people.person1.income.statePensionAge = 120;
+  plan.people.person1.assets.isa = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.assets.pension = { currentValue: 0, monthlyContribution: 0 };
   plan.assets.gia = {
     currentValue: 20_000,
     costBasis: 20_000,
@@ -247,19 +255,19 @@ test("second employment and generated investment income flow through tax", () =>
     monthlyPayment: 0,
     mortgageEndAge: 42,
   };
-  plan.income.employment = {
+  plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
     workUntilAge: 40,
   };
-  plan.income.secondEmployment = {
+  plan.people.person1.income.secondEmployment = {
     currentSalary: 20_000,
     annualSalaryGrowthRate: 0,
     startAge: 40,
     endAge: 41,
   };
-  plan.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
-  plan.income.statePension = { annualAmount: 0 };
+  plan.people.person1.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
+  plan.people.person1.income.statePension = { annualAmount: 0 };
   plan.spending.buckets = [];
   plan.assumptions = {
     isaRealReturn: 0,
@@ -284,14 +292,17 @@ test("second employment and generated investment income flow through tax", () =>
 test("pension withdrawals gross up to cover spending after income tax", () => {
   const plan = createSampleRetirementPlan();
   plan.personalDetails = {
-    currentAge: 65,
     retirementAge: 66,
     lifeExpectancy: 67,
-    statePensionAge: 120,
     householdType: "single",
   };
-  plan.assets.isa = { currentValue: 0, monthlyContribution: 0 };
-  plan.assets.pension = { currentValue: 30_000, monthlyContribution: 0 };
+  plan.people.person1.income.currentAge = 65;
+  plan.people.person1.income.statePensionAge = 120;
+  plan.people.person1.assets.isa = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.assets.pension = {
+    currentValue: 30_000,
+    monthlyContribution: 0,
+  };
   plan.assets.gia = {
     currentValue: 0,
     costBasis: 0,
@@ -305,19 +316,19 @@ test("pension withdrawals gross up to cover spending after income tax", () => {
     monthlyPayment: 0,
     mortgageEndAge: 67,
   };
-  plan.income.employment = {
+  plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
     workUntilAge: 65,
   };
-  plan.income.secondEmployment = {
+  plan.people.person1.income.secondEmployment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
     startAge: 65,
     endAge: 65,
   };
-  plan.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
-  plan.income.statePension = { annualAmount: 0 };
+  plan.people.person1.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
+  plan.people.person1.income.statePension = { annualAmount: 0 };
   plan.spending.buckets = [
     {
       id: "essential",
@@ -349,14 +360,14 @@ test("pension withdrawals gross up to cover spending after income tax", () => {
 test("selling GIA investments realizes proportional gains and includes CGT", () => {
   const plan = createSampleRetirementPlan();
   plan.personalDetails = {
-    currentAge: 65,
     retirementAge: 66,
     lifeExpectancy: 67,
-    statePensionAge: 120,
     householdType: "single",
   };
-  plan.assets.isa = { currentValue: 0, monthlyContribution: 0 };
-  plan.assets.pension = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.income.currentAge = 65;
+  plan.people.person1.income.statePensionAge = 120;
+  plan.people.person1.assets.isa = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.assets.pension = { currentValue: 0, monthlyContribution: 0 };
   plan.assets.gia = {
     currentValue: 20_000,
     costBasis: 10_000,
@@ -370,19 +381,19 @@ test("selling GIA investments realizes proportional gains and includes CGT", () 
     monthlyPayment: 0,
     mortgageEndAge: 67,
   };
-  plan.income.employment = {
+  plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
     workUntilAge: 65,
   };
-  plan.income.secondEmployment = {
+  plan.people.person1.income.secondEmployment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
     startAge: 65,
     endAge: 65,
   };
-  plan.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
-  plan.income.statePension = { annualAmount: 0 };
+  plan.people.person1.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
+  plan.people.person1.income.statePension = { annualAmount: 0 };
   plan.spending.buckets = [
     {
       id: "essential",
@@ -414,14 +425,14 @@ test("selling GIA investments realizes proportional gains and includes CGT", () 
 test("negative real cash yields are accepted and reduce projected cash", () => {
   const plan = createSampleRetirementPlan();
   plan.personalDetails = {
-    currentAge: 65,
     retirementAge: 66,
     lifeExpectancy: 67,
-    statePensionAge: 120,
     householdType: "single",
   };
-  plan.assets.isa = { currentValue: 0, monthlyContribution: 0 };
-  plan.assets.pension = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.income.currentAge = 65;
+  plan.people.person1.income.statePensionAge = 120;
+  plan.people.person1.assets.isa = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.assets.pension = { currentValue: 0, monthlyContribution: 0 };
   plan.assets.gia = {
     currentValue: 0,
     costBasis: 0,
@@ -435,19 +446,19 @@ test("negative real cash yields are accepted and reduce projected cash", () => {
     monthlyPayment: 0,
     mortgageEndAge: 67,
   };
-  plan.income.employment = {
+  plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
     workUntilAge: 65,
   };
-  plan.income.secondEmployment = {
+  plan.people.person1.income.secondEmployment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
     startAge: 65,
     endAge: 65,
   };
-  plan.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
-  plan.income.statePension = { annualAmount: 0 };
+  plan.people.person1.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
+  plan.people.person1.income.statePension = { annualAmount: 0 };
   plan.spending.buckets = [];
   plan.assumptions = {
     isaRealReturn: 0,
@@ -464,4 +475,127 @@ test("negative real cash yields are accepted and reduce projected cash", () => {
   assert.ok(Math.abs(year.interestIncome + 26.25) < 1e-10);
   assert.ok(Math.abs(year.cashValue - 973.75) < 1e-6);
   assert.equal(year.tax.totalTax, 0);
+});
+
+test("joint households calculate tax separately and advance each person's age", () => {
+  const plan = createSampleRetirementPlan();
+  plan.personalDetails = {
+    retirementAge: 41,
+    lifeExpectancy: 42,
+    householdType: "joint",
+  };
+  plan.people.person1.income.currentAge = 40;
+  plan.people.person1.income.statePensionAge = 120;
+  plan.people.person1.income.employment.currentSalary = 20_000;
+  plan.people.person1.income.employment.workUntilAge = 41;
+  plan.people.person2.income.currentAge = 38;
+  plan.people.person2.income.statePensionAge = 120;
+  plan.people.person2.income.employment.currentSalary = 30_000;
+  plan.people.person2.income.employment.workUntilAge = 39;
+  plan.people.person1.assets.isa = { currentValue: 10_000, monthlyContribution: 0 };
+  plan.people.person2.assets.isa = { currentValue: 20_000, monthlyContribution: 0 };
+  plan.people.person1.assets.pension = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person2.assets.pension = { currentValue: 0, monthlyContribution: 0 };
+  plan.assets.gia = { currentValue: 0, costBasis: 0, monthlyContribution: 0 };
+  plan.assets.cash = { currentValue: 0 };
+  plan.assets.otherAssets = { currentValue: 0 };
+  plan.assets.mortgage = {
+    outstandingBalance: 0,
+    interestRate: 0,
+    monthlyPayment: 0,
+    mortgageEndAge: 42,
+  };
+  plan.spending.buckets = [];
+  plan.assumptions = {
+    isaRealReturn: 0,
+    pensionRealReturn: 0,
+    giaInterestRealYield: 0,
+    giaDividendRealYield: 0,
+    giaCapitalGrowthRealYield: 0,
+    cashInterestRealYield: 0,
+    inflationRate: 0,
+  };
+
+  const projection = calculateProjection(plan);
+  const firstYear = projection.yearlyResults[1];
+
+  assert.equal(firstYear.personIncomes.person1.age, 40);
+  assert.equal(firstYear.personIncomes.person2.age, 38);
+  assert.equal(projection.yearlyResults[2].personIncomes.person1.age, 41);
+  assert.equal(projection.yearlyResults[2].personIncomes.person2.age, 39);
+  assert.equal(firstYear.personTaxes.person1.grossIncome, 20_000);
+  assert.equal(firstYear.personTaxes.person2.grossIncome, 30_000);
+  assert.equal(firstYear.tax.grossIncome, 50_000);
+  assert.equal(firstYear.personIsaValues.person1, 10_000);
+  assert.equal(firstYear.personIsaValues.person2, 20_000);
+  assert.equal(
+    firstYear.tax.totalTax,
+    firstYear.personTaxes.person1.totalTax +
+      firstYear.personTaxes.person2.totalTax,
+  );
+});
+
+test("joint pension withdrawals are allocated proportionally and taxed per person", () => {
+  const plan = createSampleRetirementPlan();
+  plan.personalDetails = {
+    retirementAge: 41,
+    lifeExpectancy: 42,
+    householdType: "joint",
+  };
+  plan.people.person1.income.currentAge = 40;
+  plan.people.person1.income.statePensionAge = 120;
+  plan.people.person1.income.employment.currentSalary = 0;
+  plan.people.person1.income.employment.workUntilAge = 40;
+  plan.people.person1.income.statePension.annualAmount = 0;
+  plan.people.person2.income.currentAge = 38;
+  plan.people.person2.income.statePensionAge = 120;
+  plan.people.person2.income.employment.currentSalary = 0;
+  plan.people.person2.income.employment.workUntilAge = 38;
+  plan.people.person2.income.statePension.annualAmount = 0;
+  plan.people.person1.assets.isa = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person2.assets.isa = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.assets.pension = {
+    currentValue: 10_000,
+    monthlyContribution: 0,
+  };
+  plan.people.person2.assets.pension = {
+    currentValue: 10_000,
+    monthlyContribution: 0,
+  };
+  plan.assets.gia = { currentValue: 0, costBasis: 0, monthlyContribution: 0 };
+  plan.assets.cash = { currentValue: 0 };
+  plan.assets.otherAssets = { currentValue: 0 };
+  plan.assets.mortgage = {
+    outstandingBalance: 0,
+    interestRate: 0,
+    monthlyPayment: 0,
+    mortgageEndAge: 42,
+  };
+  plan.spending.buckets = [
+    {
+      id: "essential",
+      name: "Essential spending",
+      annualAmount: 18_000,
+      inflationRate: 0,
+      startAge: 40,
+      endAge: 41,
+    },
+  ];
+  plan.assumptions = {
+    isaRealReturn: 0,
+    pensionRealReturn: 0,
+    giaInterestRealYield: 0,
+    giaDividendRealYield: 0,
+    giaCapitalGrowthRealYield: 0,
+    cashInterestRealYield: 0,
+    inflationRate: 0,
+  };
+
+  const year = calculateProjection(plan).yearlyResults[1];
+
+  assert.equal(year.withdrawals.byPerson.person1.pensionWithdrawal, 9_000);
+  assert.equal(year.withdrawals.byPerson.person2.pensionWithdrawal, 9_000);
+  assert.equal(year.personTaxes.person1.incomeTax, 0);
+  assert.equal(year.personTaxes.person2.incomeTax, 0);
+  assert.equal(year.unfundedShortfall, 0);
 });

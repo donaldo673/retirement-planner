@@ -358,6 +358,9 @@ export function calculateUkTax(inputs: TaxInputs): TaxResult {
   );
 
   return {
+    grossIncome: totalIncome,
+    personalAllowance,
+    taxableIncome,
     incomeTax,
     nationalInsurance,
     capitalGainsTax,

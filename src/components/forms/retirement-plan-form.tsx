@@ -1,10 +1,16 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useFieldArray, useFormContext } from "react-hook-form";
+import { useState } from "react";
+import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 import { NumberField } from "@/components/forms/number-field";
 import { PercentageField } from "@/components/forms/percentage-field";
-import type { RetirementPlan, WithdrawalSource } from "@/types/retirement";
+import type {
+  PersonKey,
+  RetirementPlan,
+  TaxResult,
+  WithdrawalSource,
+} from "@/types/retirement";
 
 interface SectionProps {
   id: string;
@@ -56,12 +62,63 @@ const withdrawalSources: { value: WithdrawalSource; label: string }[] = [
   { value: "pension", label: "Pension" },
 ];
 
-export function RetirementPlanForm() {
+function TaxBreakdown({ tax }: { tax?: TaxResult }) {
+  if (!tax) {
+    return (
+      <p className="text-sm text-slate-500">
+        Complete the plan inputs to see this person&apos;s tax estimate.
+      </p>
+    );
+  }
+
+  const rows = [
+    ["Gross taxable income", tax.grossIncome],
+    ["Personal allowance", tax.personalAllowance],
+    ["Taxable income", tax.taxableIncome],
+    ["Income tax", tax.incomeTax],
+    ["National Insurance", tax.nationalInsurance],
+    ["Capital gains tax", tax.capitalGainsTax],
+    ["Total tax", tax.totalTax],
+  ] as const;
+
+  return (
+    <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {rows.map(([label, amount]) => (
+        <div className="rounded-xl bg-slate-50 p-3" key={label}>
+          <dt className="text-xs font-medium text-slate-500">{label}</dt>
+          <dd className="mt-1 text-sm font-semibold text-slate-900">
+            {new Intl.NumberFormat("en-GB", {
+              style: "currency",
+              currency: "GBP",
+              maximumFractionDigits: 0,
+            }).format(amount)}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+export function RetirementPlanForm({
+  personTaxes,
+}: {
+  personTaxes?: Record<PersonKey, TaxResult>;
+}) {
   const {
     control,
     register,
     formState: { errors },
   } = useFormContext<RetirementPlan>();
+  const householdType = useWatch({
+    control,
+    name: "personalDetails.householdType",
+  });
+  const [selectedPerson, setSelectedPerson] = useState<PersonKey>("person1");
+  const activePerson =
+    householdType === "joint" ? selectedPerson : "person1";
+  const availablePeople: PersonKey[] =
+    householdType === "joint" ? ["person1", "person2"] : ["person1"];
+  const personIncomeErrors = errors.people?.[activePerson]?.income;
   const { fields, append, remove } = useFieldArray({
     control,
     keyName: "fieldKey",
@@ -78,15 +135,6 @@ export function RetirementPlanForm() {
       >
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <NumberField
-            error={errors.personalDetails?.currentAge?.message}
-            label="Current age"
-            max={120}
-            min={0}
-            name="personalDetails.currentAge"
-            step={1}
-            suffix="years"
-          />
-          <NumberField
             error={errors.personalDetails?.retirementAge?.message}
             label="Retirement age"
             max={120}
@@ -101,15 +149,6 @@ export function RetirementPlanForm() {
             max={120}
             min={0}
             name="personalDetails.lifeExpectancy"
-            step={1}
-            suffix="years"
-          />
-          <NumberField
-            error={errors.personalDetails?.statePensionAge?.message}
-            label="State Pension age"
-            max={120}
-            min={0}
-            name="personalDetails.statePensionAge"
             step={1}
             suffix="years"
           />
@@ -133,7 +172,7 @@ export function RetirementPlanForm() {
       </FormSection>
 
       <FormSection
-        description="Enter the balances and contributions you want included in the projection."
+        description="Enter the balances and contributions you want included in the projection. ISA and pension accounts belong to each person; GIA and cash investment income is attributed to Person 1."
         id="assets"
         number="02"
         title="Assets and liabilities"
@@ -143,33 +182,58 @@ export function RetirementPlanForm() {
             <h3 className="mb-4 text-sm font-semibold text-slate-800">
               Investment accounts
             </h3>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              <NumberField
-                error={errors.assets?.isa?.currentValue?.message}
-                label="ISA value"
-                name="assets.isa.currentValue"
-                prefix="£"
-              />
-              <NumberField
-                error={errors.assets?.isa?.monthlyContribution?.message}
-                label="ISA monthly contribution"
-                name="assets.isa.monthlyContribution"
-                prefix="£"
-                suffix="/ month"
-              />
-              <NumberField
-                error={errors.assets?.pension?.currentValue?.message}
-                label="Pension value"
-                name="assets.pension.currentValue"
-                prefix="£"
-              />
-              <NumberField
-                error={errors.assets?.pension?.monthlyContribution?.message}
-                label="Pension monthly contribution"
-                name="assets.pension.monthlyContribution"
-                prefix="£"
-                suffix="/ month"
-              />
+            <div className="space-y-5">
+              {(["person1", ...(householdType === "joint" ? ["person2"] : [])] as PersonKey[]).map(
+                (personKey, index) => {
+                  const personAssetErrors = errors.people?.[personKey]?.assets;
+                  return (
+                    <fieldset
+                      className="rounded-xl border border-slate-200 p-4"
+                      key={personKey}
+                    >
+                      <legend className="px-1 text-sm font-semibold text-slate-700">
+                        Person {index + 1}
+                      </legend>
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                        <NumberField
+                          error={personAssetErrors?.isa?.currentValue?.message}
+                          label="ISA value"
+                          name={`people.${personKey}.assets.isa.currentValue`}
+                          prefix="£"
+                        />
+                        <NumberField
+                          error={
+                            personAssetErrors?.isa?.monthlyContribution?.message
+                          }
+                          label="ISA monthly contribution"
+                          name={`people.${personKey}.assets.isa.monthlyContribution`}
+                          prefix="£"
+                          suffix="/ month"
+                        />
+                        <NumberField
+                          error={
+                            personAssetErrors?.pension?.currentValue?.message
+                          }
+                          label="Pension value"
+                          name={`people.${personKey}.assets.pension.currentValue`}
+                          prefix="£"
+                        />
+                        <NumberField
+                          error={
+                            personAssetErrors?.pension?.monthlyContribution
+                              ?.message
+                          }
+                          label="Pension monthly contribution"
+                          name={`people.${personKey}.assets.pension.monthlyContribution`}
+                          prefix="£"
+                          suffix="/ month"
+                        />
+                      </div>
+                    </fieldset>
+                  );
+                },
+              )}
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <NumberField
                 error={errors.assets?.gia?.currentValue?.message}
                 label="GIA value"
@@ -190,6 +254,7 @@ export function RetirementPlanForm() {
                 prefix="£"
                 suffix="/ month"
               />
+              </div>
             </div>
           </div>
 
@@ -251,103 +316,223 @@ export function RetirementPlanForm() {
       </FormSection>
 
       <FormSection
-        description="Amounts are annual. Income increases with inflation and salary growth assumptions."
+        description="Amounts are annual. Joint households can switch between people; each tab includes that person's basic tax calculation."
         id="income"
         number="03"
         title="Income"
       >
-        <div className="space-y-7">
-          <div>
-            <h3 className="mb-4 text-sm font-semibold text-slate-800">
-              Employment
-            </h3>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              <NumberField
-                error={errors.income?.employment?.currentSalary?.message}
-                label="Current salary"
-                name="income.employment.currentSalary"
-                prefix="£"
-                suffix="/ year"
-              />
-              <PercentageField
-                label="Annual salary growth"
-                name="income.employment.annualSalaryGrowthRate"
-              />
-              <NumberField
-                error={errors.income?.employment?.workUntilAge?.message}
-                label="Work until age"
-                max={120}
-                min={0}
-                name="income.employment.workUntilAge"
-                step={1}
-                suffix="years"
-              />
-            </div>
+        <div className="space-y-6">
+          <div
+            aria-label="Income person"
+            className="flex gap-2 border-b border-slate-200"
+            role="tablist"
+          >
+            {availablePeople.map((personKey, index) => (
+              <button
+                aria-controls={`income-${personKey}-panel`}
+                aria-selected={activePerson === personKey}
+                className={`min-h-11 border-b-2 px-4 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
+                  activePerson === personKey
+                    ? "border-emerald-700 text-emerald-900"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+                id={`income-${personKey}-tab`}
+                key={personKey}
+                onClick={() => setSelectedPerson(personKey)}
+                onKeyDown={(event) => {
+                  if (
+                    !["ArrowLeft", "ArrowRight", "Home", "End"].includes(
+                      event.key,
+                    )
+                  ) {
+                    return;
+                  }
+                  event.preventDefault();
+                  const currentIndex = availablePeople.indexOf(personKey);
+                  const nextIndex =
+                    event.key === "Home"
+                      ? 0
+                      : event.key === "End"
+                        ? availablePeople.length - 1
+                        : (currentIndex +
+                            (event.key === "ArrowRight" ? 1 : -1) +
+                            availablePeople.length) %
+                          availablePeople.length;
+                  const nextPerson = availablePeople[nextIndex];
+                  setSelectedPerson(nextPerson);
+                  document
+                    .getElementById(`income-${nextPerson}-tab`)
+                    ?.focus();
+                }}
+                role="tab"
+                tabIndex={activePerson === personKey ? 0 : -1}
+                type="button"
+              >
+                Person {index + 1}
+              </button>
+            ))}
           </div>
-          <div>
-            <h3 className="mb-4 text-sm font-semibold text-slate-800">
-              Second employment
-            </h3>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <NumberField
-                error={errors.income?.secondEmployment?.currentSalary?.message}
-                label="Current annual salary"
-                name="income.secondEmployment.currentSalary"
-                prefix="£"
-                suffix="/ year"
-              />
-              <PercentageField
-                label="Annual salary growth"
-                name="income.secondEmployment.annualSalaryGrowthRate"
-              />
-              <NumberField
-                error={errors.income?.secondEmployment?.startAge?.message}
-                label="Start age"
-                max={120}
-                min={0}
-                name="income.secondEmployment.startAge"
-                step={1}
-                suffix="years"
-              />
-              <NumberField
-                error={errors.income?.secondEmployment?.endAge?.message}
-                label="End age"
-                max={120}
-                min={0}
-                name="income.secondEmployment.endAge"
-                step={1}
-                suffix="years"
-              />
-            </div>
-          </div>
-          <div>
-            <h3 className="mb-4 text-sm font-semibold text-slate-800">
-              Other income
-            </h3>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              <NumberField
-                error={errors.income?.otherIncome?.rentalIncome?.message}
-                label="Rental taxable profit"
-                name="income.otherIncome.rentalIncome"
-                prefix="£"
-                suffix="/ year"
-                description="Enter profit after allowable expenses, not gross rent."
-              />
-              <NumberField
-                error={errors.income?.otherIncome?.otherIncome?.message}
-                label="Other taxable income"
-                name="income.otherIncome.otherIncome"
-                prefix="£"
-                suffix="/ year"
-              />
-              <NumberField
-                error={errors.income?.statePension?.annualAmount?.message}
-                label="Estimated State Pension"
-                name="income.statePension.annualAmount"
-                prefix="£"
-                suffix="/ year"
-              />
-            </div>
+          <div
+            aria-labelledby={`income-${activePerson}-tab`}
+            className="space-y-7"
+            id={`income-${activePerson}-panel`}
+            role="tabpanel"
+            tabIndex={0}
+          >
+            <section aria-labelledby={`${activePerson}-planning-ages`}>
+              <h3
+                className="mb-4 text-sm font-semibold text-slate-800"
+                id={`${activePerson}-planning-ages`}
+              >
+                Planning ages
+              </h3>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <NumberField
+                  error={personIncomeErrors?.currentAge?.message}
+                  label="Current age"
+                  max={120}
+                  min={0}
+                  name={`people.${activePerson}.income.currentAge`}
+                  step={1}
+                  suffix="years"
+                />
+                <NumberField
+                  error={personIncomeErrors?.statePensionAge?.message}
+                  label="State Pension age"
+                  max={120}
+                  min={0}
+                  name={`people.${activePerson}.income.statePensionAge`}
+                  step={1}
+                  suffix="years"
+                />
+              </div>
+            </section>
+            <section aria-labelledby={`${activePerson}-employment`}>
+              <h3
+                className="mb-4 text-sm font-semibold text-slate-800"
+                id={`${activePerson}-employment`}
+              >
+                Employment
+              </h3>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <NumberField
+                  error={
+                    personIncomeErrors?.employment?.currentSalary?.message
+                  }
+                  label="Current salary"
+                  name={`people.${activePerson}.income.employment.currentSalary`}
+                  prefix="£"
+                  suffix="/ year"
+                />
+                <PercentageField
+                  label="Annual salary growth"
+                  name={`people.${activePerson}.income.employment.annualSalaryGrowthRate`}
+                />
+                <NumberField
+                  error={
+                    personIncomeErrors?.employment?.workUntilAge?.message
+                  }
+                  label="Work until age"
+                  max={120}
+                  min={0}
+                  name={`people.${activePerson}.income.employment.workUntilAge`}
+                  step={1}
+                  suffix="years"
+                />
+              </div>
+            </section>
+            <section aria-labelledby={`${activePerson}-second-employment`}>
+              <h3
+                className="mb-4 text-sm font-semibold text-slate-800"
+                id={`${activePerson}-second-employment`}
+              >
+                Second employment
+              </h3>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <NumberField
+                  error={
+                    personIncomeErrors?.secondEmployment?.currentSalary?.message
+                  }
+                  label="Current annual salary"
+                  name={`people.${activePerson}.income.secondEmployment.currentSalary`}
+                  prefix="£"
+                  suffix="/ year"
+                />
+                <PercentageField
+                  label="Annual salary growth"
+                  name={`people.${activePerson}.income.secondEmployment.annualSalaryGrowthRate`}
+                />
+                <NumberField
+                  error={
+                    personIncomeErrors?.secondEmployment?.startAge?.message
+                  }
+                  label="Start age"
+                  max={120}
+                  min={0}
+                  name={`people.${activePerson}.income.secondEmployment.startAge`}
+                  step={1}
+                  suffix="years"
+                />
+                <NumberField
+                  error={
+                    personIncomeErrors?.secondEmployment?.endAge?.message
+                  }
+                  label="End age"
+                  max={120}
+                  min={0}
+                  name={`people.${activePerson}.income.secondEmployment.endAge`}
+                  step={1}
+                  suffix="years"
+                />
+              </div>
+            </section>
+            <section aria-labelledby={`${activePerson}-other-income`}>
+              <h3
+                className="mb-4 text-sm font-semibold text-slate-800"
+                id={`${activePerson}-other-income`}
+              >
+                Other income
+              </h3>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <NumberField
+                  error={
+                    personIncomeErrors?.otherIncome?.rentalIncome?.message
+                  }
+                  label="Rental taxable profit"
+                  name={`people.${activePerson}.income.otherIncome.rentalIncome`}
+                  prefix="£"
+                  suffix="/ year"
+                  description="Enter profit after allowable expenses, not gross rent."
+                />
+                <NumberField
+                  error={
+                    personIncomeErrors?.otherIncome?.otherIncome?.message
+                  }
+                  label="Other taxable income"
+                  name={`people.${activePerson}.income.otherIncome.otherIncome`}
+                  prefix="£"
+                  suffix="/ year"
+                />
+                <NumberField
+                  error={
+                    personIncomeErrors?.statePension?.annualAmount?.message
+                  }
+                  label="Estimated State Pension"
+                  name={`people.${activePerson}.income.statePension.annualAmount`}
+                  prefix="£"
+                  suffix="/ year"
+                />
+              </div>
+            </section>
+            <section aria-labelledby={`${activePerson}-tax-calculation`}>
+              <h3
+                className="mb-4 text-sm font-semibold text-slate-800"
+                id={`${activePerson}-tax-calculation`}
+              >
+                Basic income tax calculation
+              </h3>
+              <TaxBreakdown tax={personTaxes?.[activePerson]} />
+            </section>
           </div>
         </div>
       </FormSection>

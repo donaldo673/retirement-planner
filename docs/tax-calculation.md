@@ -1,8 +1,9 @@
 # Tax and investment calculation model
 
-The planner estimates an individual's annual UK income tax, employee Class 1
-National Insurance, and Capital Gains Tax. It uses 2026/27 rules as its base;
-projection years map one-for-one to tax years from 2026/27 onward.
+The planner estimates annual UK income tax, employee Class 1 National
+Insurance, and Capital Gains Tax separately for each person. It uses 2026/27
+rules as its base; projection years map one-for-one to tax years from 2026/27
+onward.
 
 ## Included
 
@@ -13,7 +14,10 @@ projection years map one-for-one to tax years from 2026/27 onward.
   Personal Savings Allowance, dividend allowance, and current savings/dividend
   tax rates are included.
 - Employee National Insurance is estimated annually for each employment
-  separately and stops at State Pension age.
+  separately for each person and stops at that person's State Pension age.
+- Joint households are modeled as two independent taxpayers with separate
+  personal allowances, income-tax bands, and National Insurance calculations.
+  Each person has their own ISA and pension balances and contributions.
 - State Pension, taxable rental profit, other taxable income, and gross private
   pension withdrawals are included in taxable income. Pension withdrawals are
   treated as fully taxable; tax-free lump sums and UFPLS are not modeled.
@@ -21,6 +25,7 @@ projection years map one-for-one to tax years from 2026/27 onward.
   taxed as income. ISA and pension investment returns are tax-sheltered.
 - GIA capital growth is untaxed until withdrawal. Realized gains use the
   supplied cost basis proportionally and the annual CGT exemption and rates.
+  GIA/cash interest, dividends, and realized gains are attributed to Person 1.
 - Thresholds remain fixed through 2027/28 and are indexed from 2028/29 using
   the plan's general inflation assumption. Rates are not inflation-adjusted.
 
@@ -39,8 +44,9 @@ contributions, tax-free pension cash, marriage or other personal allowances,
 property/trading allowances, foreign income, capital-loss carryforwards, or
 share-identification rules for CGT (including same-day and 30-day matching).
 Investment income is generated from annual real yields, rather than individual
-holdings or transaction history. The planner models the selected person's
-income; it does not split a joint household into two taxpayers.
+holdings or transaction history. ISA and pension withdrawals are allocated
+proportionally across each person's balances; pension withdrawals are taxed
+separately for each person. A single household ignores the Person 2 projection.
 
 Tax values are maintained in
 [uk-tax.ts](../src/lib/calculations/uk-tax.ts). Review and update them against
