@@ -1,13 +1,26 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { RetirementPlanForm } from "@/components/forms/retirement-plan-form";
 import { createSampleRetirementPlan } from "@/data/sample-plan";
 import { calculateProjection } from "@/lib/calculations/retirement-engine";
-import { retirementPlanSchema } from "@/lib/validation/retirement-plan-schema";
-import type { ProjectionStatus, RetirementPlan } from "@/types/retirement";
+import {
+  retirementPlanSchema,
+  savedPlanSchema,
+} from "@/lib/validation/retirement-plan-schema";
+import type {
+  ProjectionStatus,
+  RetirementPlan,
+  SavedPlan,
+} from "@/types/retirement";
+
+const SAVED_PLAN_STORAGE_KEY = "retirement-planner:saved-plan";
+
+type PersistenceStatus =
+  | { kind: "loading" | "saved" | "unsaved"; message: string }
+  | { kind: "error"; message: string };
 
 const currencyFormatter = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -52,6 +65,10 @@ const statusContent: Record<
 
 function formatCurrency(value: number): string {
   return currencyFormatter.format(value);
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown browser storage error.";
 }
 
 function StatusSummary({ status }: { status: ProjectionStatus }) {
@@ -164,7 +181,111 @@ export function RetirementDashboard() {
     mode: "onChange",
     resolver: zodResolver(retirementPlanSchema),
   });
+  const { reset } = form;
+  const [canSavePlan, setCanSavePlan] = useState(false);
+  const [persistenceStatus, setPersistenceStatus] =
+    useState<PersistenceStatus>({
+      kind: "loading",
+      message: "Checking this browser for a saved plan...",
+    });
   const watchedPlan = useWatch({ control: form.control });
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      let savedPlanText: string | null;
+      try {
+        savedPlanText = window.localStorage.getItem(SAVED_PLAN_STORAGE_KEY);
+      } catch (error) {
+        setPersistenceStatus({
+          kind: "error",
+          message: `Browser storage is unavailable. Changes are not being saved. ${getErrorMessage(error)}`,
+        });
+        return;
+      }
+
+      if (savedPlanText === null) {
+        setCanSavePlan(true);
+        setPersistenceStatus({
+          kind: "saved",
+          message: "Valid changes will be saved automatically in this browser.",
+        });
+        return;
+      }
+
+      let savedPlanData: unknown;
+      try {
+        savedPlanData = JSON.parse(savedPlanText);
+      } catch (error) {
+        setPersistenceStatus({
+          kind: "error",
+          message: `The saved plan could not be read. Use “Reset example” to replace it. ${getErrorMessage(error)}`,
+        });
+        return;
+      }
+
+      const savedPlan = savedPlanSchema.safeParse(savedPlanData);
+      if (!savedPlan.success) {
+        setPersistenceStatus({
+          kind: "error",
+          message:
+            "The saved plan is invalid or from an unsupported version. Use “Reset example” to replace it.",
+        });
+        return;
+      }
+
+      reset(savedPlan.data.plan);
+      setCanSavePlan(true);
+      setPersistenceStatus({
+        kind: "saved",
+        message: "Your saved plan has been loaded from this browser.",
+      });
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [reset]);
+
+  useEffect(() => {
+    if (!canSavePlan) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const parsedPlan = retirementPlanSchema.safeParse(watchedPlan);
+      if (!parsedPlan.success) {
+        setPersistenceStatus({
+          kind: "unsaved",
+          message:
+            "The latest edits are not saved. Complete or correct the highlighted inputs to save them.",
+        });
+        return;
+      }
+
+      const savedPlan: SavedPlan = {
+        version: 1,
+        savedAt: new Date().toISOString(),
+        plan: parsedPlan.data,
+      };
+
+      try {
+        window.localStorage.setItem(
+          SAVED_PLAN_STORAGE_KEY,
+          JSON.stringify(savedPlan),
+        );
+        setPersistenceStatus({
+          kind: "saved",
+          message: "Your valid plan inputs are saved in this browser.",
+        });
+      } catch (error) {
+        setPersistenceStatus({
+          kind: "error",
+          message: `Your plan could not be saved in this browser. ${getErrorMessage(error)}`,
+        });
+      }
+    }, 200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [canSavePlan, watchedPlan]);
+
   const projection = useMemo(() => {
     const parsedPlan = retirementPlanSchema.safeParse(watchedPlan);
     return parsedPlan.success ? calculateProjection(parsedPlan.data) : null;
@@ -175,6 +296,11 @@ export function RetirementDashboard() {
 
   function resetPlan() {
     form.reset(createSampleRetirementPlan());
+    setCanSavePlan(true);
+    setPersistenceStatus({
+      kind: "unsaved",
+      message: "Example plan restored. Saving it in this browser...",
+    });
   }
 
   return (
@@ -208,6 +334,7 @@ export function RetirementDashboard() {
             </div>
             <button
               className="min-h-10 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 sm:px-4 sm:text-sm"
+              disabled={persistenceStatus.kind === "loading"}
               onClick={resetPlan}
               type="button"
             >
@@ -260,6 +387,39 @@ export function RetirementDashboard() {
                 </span>
               </div>
             </div>
+
+            <aside
+              aria-labelledby="local-storage-heading"
+              className="mb-5 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm sm:px-5"
+            >
+              <h2
+                className="text-sm font-semibold text-slate-900"
+                id="local-storage-heading"
+              >
+                Local data and privacy
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                This planner uses browser local storage, not cookies, to keep
+                your valid plan inputs on this device. The app does not send
+                your plan to a server. This data is not encrypted, so anyone
+                with access to this device or browser profile may be able to
+                view it; clear this browser&apos;s site data to remove it.
+              </p>
+              <p
+                className={`mt-2 text-xs font-medium ${
+                  persistenceStatus.kind === "error"
+                    ? "text-rose-700"
+                    : persistenceStatus.kind === "unsaved"
+                      ? "text-amber-700"
+                      : "text-emerald-800"
+                }`}
+                role={
+                  persistenceStatus.kind === "error" ? "alert" : "status"
+                }
+              >
+                {persistenceStatus.message}
+              </p>
+            </aside>
 
             {summary && status ? (
               <>
@@ -350,7 +510,8 @@ export function RetirementDashboard() {
               </h2>
             </div>
             <p className="text-xs leading-5 text-slate-500">
-              Changes update the estimate immediately. They are not saved yet.
+              Changes update the estimate immediately. Valid inputs save
+              automatically in this browser.
             </p>
           </section>
 

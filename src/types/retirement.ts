@@ -274,7 +274,7 @@ export type MonteCarloSimulator = (
 ) => SimulationResult;
 
 export interface SavedPlan {
-  version: number;
+  version: 1;
   savedAt: string;
   plan: RetirementPlan;
 }

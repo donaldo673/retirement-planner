@@ -177,3 +177,9 @@ export const retirementPlanSchema = z
       });
     }
   });
+
+export const savedPlanSchema = z.object({
+  version: z.literal(1),
+  savedAt: z.string().datetime(),
+  plan: retirementPlanSchema,
+});
