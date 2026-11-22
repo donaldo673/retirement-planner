@@ -36,7 +36,7 @@ export function PercentageField({
         return (
           <div className="min-w-0">
             <label
-              className="mb-1.5 block text-sm font-medium text-slate-700"
+              className="form-label"
               htmlFor={id}
             >
               {label}
@@ -47,11 +47,7 @@ export function PercentageField({
                   [descriptionId, errorId].filter(Boolean).join(" ") || undefined
                 }
                 aria-invalid={Boolean(fieldState.error)}
-                className={`min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 pr-10 text-sm text-slate-900 shadow-sm outline-none transition hover:border-slate-400 focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10 ${
-                  fieldState.error
-                    ? "border-rose-500 focus:border-rose-600 focus:ring-rose-500/10"
-                    : ""
-                }`}
+                className="form-control form-control--percentage"
                 id={id}
                 inputMode="decimal"
                 min={min}
@@ -69,7 +65,7 @@ export function PercentageField({
               />
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-400"
+                className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-400 dark:text-slate-500"
               >
                 %
               </span>

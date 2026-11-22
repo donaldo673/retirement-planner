@@ -30,24 +30,24 @@ function FormSection({
   return (
     <section
       aria-labelledby={`${id}-heading`}
-      className="scroll-mt-24 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-7"
+      className="scroll-mt-24 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow duration-200 hover:shadow-md sm:p-7 dark:border-slate-800 dark:bg-slate-900"
       id={id}
     >
       <div className="mb-6 flex items-start gap-3">
         <span
           aria-hidden="true"
-          className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-xs font-semibold text-emerald-800"
+          className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-teal-50 text-xs font-semibold text-teal-800 dark:bg-teal-950 dark:text-teal-200"
         >
           {number}
         </span>
         <div>
           <h2
-            className="text-lg font-semibold tracking-tight text-slate-900"
+            className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white"
             id={`${id}-heading`}
           >
             {title}
           </h2>
-          <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
+          <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p>
         </div>
       </div>
       {children}
@@ -65,7 +65,7 @@ const withdrawalSources: { value: WithdrawalSource; label: string }[] = [
 function TaxBreakdown({ tax }: { tax?: TaxResult }) {
   if (!tax) {
     return (
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-slate-500 dark:text-slate-400">
         Complete the plan inputs to see this person&apos;s tax estimate.
       </p>
     );
@@ -84,9 +84,9 @@ function TaxBreakdown({ tax }: { tax?: TaxResult }) {
   return (
     <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {rows.map(([label, amount]) => (
-        <div className="rounded-xl bg-slate-50 p-3" key={label}>
-          <dt className="text-xs font-medium text-slate-500">{label}</dt>
-          <dd className="mt-1 text-sm font-semibold text-slate-900">
+        <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70" key={label}>
+          <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</dt>
+          <dd className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
             {new Intl.NumberFormat("en-GB", {
               style: "currency",
               currency: "GBP",
@@ -154,13 +154,13 @@ export function RetirementPlanForm({
           />
           <div>
             <label
-              className="mb-1.5 block text-sm font-medium text-slate-700"
+              className="form-label"
               htmlFor="household-type"
             >
               Household type
             </label>
             <select
-              className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition hover:border-slate-400 focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10"
+              className="form-control"
               id="household-type"
               {...register("personalDetails.householdType")}
             >
@@ -179,7 +179,7 @@ export function RetirementPlanForm({
       >
         <div className="space-y-7">
           <div>
-            <h3 className="mb-4 text-sm font-semibold text-slate-800">
+            <h3 className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">
               Investment accounts
             </h3>
             <div className="space-y-5">
@@ -188,10 +188,10 @@ export function RetirementPlanForm({
                   const personAssetErrors = errors.people?.[personKey]?.assets;
                   return (
                     <fieldset
-                      className="rounded-xl border border-slate-200 p-4"
+                      className="rounded-xl border border-slate-200 p-4 dark:border-slate-700"
                       key={personKey}
                     >
-                      <legend className="px-1 text-sm font-semibold text-slate-700">
+                      <legend className="px-1 text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Person {index + 1}
                       </legend>
                       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -259,7 +259,7 @@ export function RetirementPlanForm({
           </div>
 
           <div>
-            <h3 className="mb-4 text-sm font-semibold text-slate-800">
+            <h3 className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">
               Cash and other assets
             </h3>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -279,7 +279,7 @@ export function RetirementPlanForm({
           </div>
 
           <div>
-            <h3 className="mb-4 text-sm font-semibold text-slate-800">
+            <h3 className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">
               Mortgage
             </h3>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -324,17 +324,17 @@ export function RetirementPlanForm({
         <div className="space-y-6">
           <div
             aria-label="Income person"
-            className="flex gap-2 border-b border-slate-200"
+            className="flex gap-2 border-b border-slate-200 dark:border-slate-700"
             role="tablist"
           >
             {availablePeople.map((personKey, index) => (
               <button
                 aria-controls={`income-${personKey}-panel`}
                 aria-selected={activePerson === personKey}
-                className={`min-h-11 border-b-2 px-4 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
+                className={`min-h-11 border-b-2 px-4 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${
                   activePerson === personKey
-                    ? "border-emerald-700 text-emerald-900"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
+                    ? "border-teal-700 text-teal-900 dark:border-teal-400 dark:text-teal-200"
+                    : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
                 }`}
                 id={`income-${personKey}-tab`}
                 key={personKey}
@@ -381,7 +381,7 @@ export function RetirementPlanForm({
           >
             <section aria-labelledby={`${activePerson}-planning-ages`}>
               <h3
-                className="mb-4 text-sm font-semibold text-slate-800"
+                className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100"
                 id={`${activePerson}-planning-ages`}
               >
                 Planning ages
@@ -409,7 +409,7 @@ export function RetirementPlanForm({
             </section>
             <section aria-labelledby={`${activePerson}-employment`}>
               <h3
-                className="mb-4 text-sm font-semibold text-slate-800"
+                className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100"
                 id={`${activePerson}-employment`}
               >
                 Employment
@@ -443,7 +443,7 @@ export function RetirementPlanForm({
             </section>
             <section aria-labelledby={`${activePerson}-second-employment`}>
               <h3
-                className="mb-4 text-sm font-semibold text-slate-800"
+                className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100"
                 id={`${activePerson}-second-employment`}
               >
                 Second employment
@@ -488,7 +488,7 @@ export function RetirementPlanForm({
             </section>
             <section aria-labelledby={`${activePerson}-other-income`}>
               <h3
-                className="mb-4 text-sm font-semibold text-slate-800"
+                className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100"
                 id={`${activePerson}-other-income`}
               >
                 Other income
@@ -526,7 +526,7 @@ export function RetirementPlanForm({
             </section>
             <section aria-labelledby={`${activePerson}-tax-calculation`}>
               <h3
-                className="mb-4 text-sm font-semibold text-slate-800"
+                className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100"
                 id={`${activePerson}-tax-calculation`}
               >
                 Basic income tax calculation
@@ -552,7 +552,7 @@ export function RetirementPlanForm({
 
             return (
               <article
-                className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5"
+                className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5 dark:border-slate-700 dark:bg-slate-800/50"
                 key={field.fieldKey}
               >
                 <input
@@ -564,7 +564,7 @@ export function RetirementPlanForm({
                     className="block min-w-0 flex-1"
                     htmlFor={`bucket-${field.id}-name`}
                   >
-                    <span className="mb-1.5 block text-sm font-medium text-slate-700">
+                    <span className="form-label">
                       Category name
                     </span>
                     <input
@@ -574,11 +574,7 @@ export function RetirementPlanForm({
                           : undefined
                       }
                       aria-invalid={Boolean(bucketErrors?.name?.message)}
-                      className={`min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition hover:border-slate-400 focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10 ${
-                        bucketErrors?.name?.message
-                          ? "border-rose-500 focus:border-rose-600 focus:ring-rose-500/10"
-                          : ""
-                      }`}
+                      className="form-control"
                       id={`bucket-${field.id}-name`}
                       {...register(`${bucketPath}.name` as const)}
                     />
@@ -594,7 +590,7 @@ export function RetirementPlanForm({
                   </label>
                   <button
                     aria-label={`Remove ${bucketName}`}
-                    className="mt-6 flex size-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg text-slate-500 transition hover:border-rose-200 hover:text-rose-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="mt-6 flex size-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg text-slate-500 transition hover:border-rose-200 hover:text-rose-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
                     disabled={fields.length === 1}
                     onClick={() => remove(index)}
                     type="button"
@@ -637,7 +633,7 @@ export function RetirementPlanForm({
             );
           })}
           <button
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dashed border-emerald-300 px-4 text-sm font-semibold text-emerald-800 transition hover:border-emerald-500 hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dashed border-teal-300 px-4 text-sm font-semibold text-teal-800 transition hover:border-teal-500 hover:bg-teal-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 dark:border-teal-800 dark:text-teal-300 dark:hover:bg-teal-950/50"
             onClick={() =>
               append({
                 id: `custom-${crypto.randomUUID()}`,
@@ -667,13 +663,13 @@ export function RetirementPlanForm({
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <div>
             <label
-              className="mb-1.5 block text-sm font-medium text-slate-700"
+              className="form-label"
               htmlFor="tax-jurisdiction"
             >
               UK tax jurisdiction
             </label>
             <select
-              className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition hover:border-slate-400 focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10"
+              className="form-control"
               id="tax-jurisdiction"
               {...register("taxSettings.jurisdiction")}
             >
@@ -735,7 +731,7 @@ export function RetirementPlanForm({
             return (
               <div key={fieldName}>
                 <label
-                  className="mb-1.5 block text-sm font-medium text-slate-700"
+                  className="form-label"
                   htmlFor={`withdrawal-order-${index}`}
                 >
                   {index + 1}
@@ -744,11 +740,7 @@ export function RetirementPlanForm({
                 <select
                   aria-describedby={error ? `withdrawal-order-${index}-error` : undefined}
                   aria-invalid={Boolean(error)}
-                  className={`min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition hover:border-slate-400 focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10 ${
-                    error
-                      ? "border-rose-500 focus:border-rose-600 focus:ring-rose-500/10"
-                      : ""
-                  }`}
+                  className="form-control"
                   id={`withdrawal-order-${index}`}
                   {...register(fieldName)}
                 >

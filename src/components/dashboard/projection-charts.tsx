@@ -71,9 +71,9 @@ function ProjectionChart({
   }
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-      <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
-      <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
+    <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 dark:border-slate-800 dark:bg-slate-900">
+      <h3 className="text-sm font-semibold text-slate-950 dark:text-white">{title}</h3>
+      <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{description}</p>
       <svg
         aria-labelledby={`${id}-title ${id}-description`}
         className="mt-4 h-auto w-full overflow-visible"
@@ -87,7 +87,7 @@ function ProjectionChart({
         {ticks.map((tick) => (
           <g key={tick.value}>
             <line
-              stroke="#e2e8f0"
+              stroke="var(--chart-grid)"
               strokeDasharray="3 5"
               x1={plot.left}
               x2={width - plot.right}
@@ -95,7 +95,7 @@ function ProjectionChart({
               y2={tick.y}
             />
             <text
-              fill="#64748b"
+              fill="var(--chart-label)"
               fontSize="12"
               textAnchor="end"
               x={plot.left - 10}
@@ -108,7 +108,7 @@ function ProjectionChart({
         {ageTickIndexes.map((index) => {
           return (
             <text
-              fill="#64748b"
+              fill="var(--chart-label)"
               fontSize="12"
               key={`${years[index].age}-${index}`}
               textAnchor="middle"
@@ -120,7 +120,7 @@ function ProjectionChart({
           );
         })}
         <text
-          fill="#64748b"
+          fill="var(--chart-label)"
           fontSize="11"
           textAnchor="middle"
           x={plot.left + plotWidth / 2}
@@ -156,7 +156,7 @@ function ProjectionChart({
       </svg>
       <ul
         aria-label={`${title} legend`}
-        className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-600"
+        className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-600 dark:text-slate-300"
       >
         {series.map((item) => (
           <li className="flex items-center gap-2" key={item.label}>
@@ -199,15 +199,15 @@ export function ProjectionCharts({
     }));
 
   return (
-    <details className="group mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-emerald-700 [&::-webkit-details-marker]:hidden sm:px-5">
+    <details className="group mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-600 [&::-webkit-details-marker]:hidden sm:px-5 dark:text-slate-100 dark:hover:bg-slate-800">
         <span>View projection graphs</span>
         <span
           aria-hidden="true"
-          className="size-2.5 shrink-0 rotate-45 border-b-2 border-r-2 border-emerald-800 transition-transform group-open:-rotate-[135deg]"
+          className="size-2.5 shrink-0 rotate-45 border-b-2 border-r-2 border-teal-700 transition-transform group-open:-rotate-[135deg] dark:border-teal-300"
         />
       </summary>
-      <div className="grid gap-4 border-t border-slate-200 bg-slate-50/70 p-3 sm:p-5 lg:grid-cols-2">
+      <div className="grid gap-4 border-t border-slate-200 bg-slate-50/70 p-3 sm:p-5 lg:grid-cols-2 dark:border-slate-800 dark:bg-slate-950/60">
         {annualYears.length > 0 ? (
           <>
             <ProjectionChart
@@ -249,7 +249,7 @@ export function ProjectionCharts({
             />
           </>
         ) : (
-          <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 lg:col-span-2">
+          <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 lg:col-span-2 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
             No annual projection years are available for this plan.
           </p>
         )}
