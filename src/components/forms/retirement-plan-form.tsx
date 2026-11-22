@@ -5,9 +5,15 @@ import { useState } from "react";
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 import { NumberField } from "@/components/forms/number-field";
 import { PercentageField } from "@/components/forms/percentage-field";
+import { MortgageForm } from "@/components/mortgages/MortgageForm";
+import { calculateMarginalEmploymentTaxRates } from "@/lib/calculations/uk-tax";
 import type {
+  AnnualPersonIncome,
   PersonKey,
+  ProjectionResult,
+  ProjectionYear,
   RetirementPlan,
+  TaxInputs,
   TaxResult,
   WithdrawalSource,
 } from "@/types/retirement";
@@ -30,24 +36,24 @@ function FormSection({
   return (
     <section
       aria-labelledby={`${id}-heading`}
-      className="scroll-mt-24 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-7"
+      className="scroll-mt-24 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow duration-200 hover:shadow-md sm:p-7 dark:border-slate-800 dark:bg-slate-900"
       id={id}
     >
       <div className="mb-6 flex items-start gap-3">
         <span
           aria-hidden="true"
-          className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-xs font-semibold text-emerald-800"
+          className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-teal-50 text-xs font-semibold text-teal-800 dark:bg-teal-950 dark:text-teal-200"
         >
           {number}
         </span>
         <div>
           <h2
-            className="text-lg font-semibold tracking-tight text-slate-900"
+            className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white"
             id={`${id}-heading`}
           >
             {title}
           </h2>
-          <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
+          <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p>
         </div>
       </div>
       {children}
@@ -62,10 +68,16 @@ const withdrawalSources: { value: WithdrawalSource; label: string }[] = [
   { value: "pension", label: "Pension" },
 ];
 
-function TaxBreakdown({ tax }: { tax?: TaxResult }) {
+function TaxBreakdown({
+  tax,
+  marginalTaxInputs,
+}: {
+  tax?: TaxResult;
+  marginalTaxInputs?: TaxInputs;
+}) {
   if (!tax) {
     return (
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-slate-500 dark:text-slate-400">
         Complete the plan inputs to see this person&apos;s tax estimate.
       </p>
     );
@@ -80,29 +92,91 @@ function TaxBreakdown({ tax }: { tax?: TaxResult }) {
     ["Capital gains tax", tax.capitalGainsTax],
     ["Total tax", tax.totalTax],
   ] as const;
+  const marginalRates = marginalTaxInputs
+    ? calculateMarginalEmploymentTaxRates(marginalTaxInputs)
+    : null;
 
   return (
-    <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      {rows.map(([label, amount]) => (
-        <div className="rounded-xl bg-slate-50 p-3" key={label}>
-          <dt className="text-xs font-medium text-slate-500">{label}</dt>
-          <dd className="mt-1 text-sm font-semibold text-slate-900">
-            {new Intl.NumberFormat("en-GB", {
-              style: "currency",
-              currency: "GBP",
-              maximumFractionDigits: 0,
-            }).format(amount)}
-          </dd>
+    <div className="space-y-3">
+      <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {rows.map(([label, amount]) => (
+          <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70" key={label}>
+            <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</dt>
+            <dd className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+              {new Intl.NumberFormat("en-GB", {
+                style: "currency",
+                currency: "GBP",
+                maximumFractionDigits: 0,
+              }).format(amount)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {marginalRates && (
+        <div
+          aria-label="Marginal tax rate including income tax and National Insurance"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 p-4 dark:border-teal-900 dark:bg-teal-950/30"
+          role="group"
+        >
+          <div>
+            <p className="text-sm font-semibold text-teal-950 dark:text-teal-100">
+              Marginal Rate on Additional Earnings
+            </p>
+            <p className="mt-1 text-xs leading-5 text-teal-900 dark:text-teal-200">
+              Income tax{" "}
+              {formatPercentage(marginalRates.incomeTax)} + National Insurance{" "}
+              {formatPercentage(marginalRates.nationalInsurance)} on the next
+              £1 earned through an existing job.
+            </p>
+          </div>
+          <p className="text-2xl font-semibold tabular-nums text-teal-950 dark:text-teal-100">
+            {formatPercentage(marginalRates.combined)}
+          </p>
         </div>
-      ))}
-    </dl>
+      )}
+    </div>
   );
+}
+
+function formatPercentage(rate: number): string {
+  return new Intl.NumberFormat("en-GB", {
+    style: "percent",
+    maximumFractionDigits: 1,
+  }).format(rate);
+}
+
+function createMarginalTaxInputs(
+  taxYear: number,
+  income: AnnualPersonIncome,
+  statePensionAge: number,
+  inflationRate: number,
+  jurisdiction: RetirementPlan["taxSettings"]["jurisdiction"],
+): TaxInputs {
+  return {
+    taxYear,
+    inflationRate,
+    jurisdiction,
+    age: income.age,
+    statePensionAge,
+    employmentIncomes: [income.salaryIncome, income.secondSalaryIncome],
+    rentalProfit: income.rentalIncome,
+    otherTaxableIncome: income.otherIncomeAmount,
+    pensionIncome: income.pensionDrawdownIncome,
+    statePensionIncome: income.statePensionIncome,
+    savingsInterest: Math.max(0, income.interestIncome),
+    dividendIncome: Math.max(0, income.dividendIncome),
+    capitalGains: income.realizedCapitalGains,
+  };
 }
 
 export function RetirementPlanForm({
   personTaxes,
+  projection,
+  projectionYear,
 }: {
   personTaxes?: Record<PersonKey, TaxResult>;
+  projection?: ProjectionResult | null;
+  projectionYear?: ProjectionYear;
 }) {
   const {
     control,
@@ -113,12 +187,43 @@ export function RetirementPlanForm({
     control,
     name: "personalDetails.householdType",
   });
+  const currentAge = useWatch({
+    control,
+    name: "people.person1.income.currentAge",
+  });
+  const retirementAge = useWatch({
+    control,
+    name: "personalDetails.retirementAge",
+  });
   const [selectedPerson, setSelectedPerson] = useState<PersonKey>("person1");
   const activePerson =
     householdType === "joint" ? selectedPerson : "person1";
+  const activeStatePensionAge = useWatch({
+    control,
+    name: `people.${activePerson}.income.statePensionAge`,
+  });
+  const inflationRate = useWatch({
+    control,
+    name: "assumptions.inflationRate",
+  });
+  const jurisdiction = useWatch({
+    control,
+    name: "taxSettings.jurisdiction",
+  });
   const availablePeople: PersonKey[] =
     householdType === "joint" ? ["person1", "person2"] : ["person1"];
   const personIncomeErrors = errors.people?.[activePerson]?.income;
+  const activePersonIncome = projectionYear?.personIncomes[activePerson];
+  const marginalTaxInputs =
+    projectionYear && activePersonIncome
+      ? createMarginalTaxInputs(
+          projectionYear.taxYear,
+          activePersonIncome,
+          activeStatePensionAge,
+          inflationRate,
+          jurisdiction,
+        )
+      : undefined;
   const { fields, append, remove } = useFieldArray({
     control,
     keyName: "fieldKey",
@@ -154,13 +259,13 @@ export function RetirementPlanForm({
           />
           <div>
             <label
-              className="mb-1.5 block text-sm font-medium text-slate-700"
+              className="form-label"
               htmlFor="household-type"
             >
               Household type
             </label>
             <select
-              className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition hover:border-slate-400 focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10"
+              className="form-control"
               id="household-type"
               {...register("personalDetails.householdType")}
             >
@@ -179,7 +284,7 @@ export function RetirementPlanForm({
       >
         <div className="space-y-7">
           <div>
-            <h3 className="mb-4 text-sm font-semibold text-slate-800">
+            <h3 className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">
               Investment accounts
             </h3>
             <div className="space-y-5">
@@ -188,10 +293,10 @@ export function RetirementPlanForm({
                   const personAssetErrors = errors.people?.[personKey]?.assets;
                   return (
                     <fieldset
-                      className="rounded-xl border border-slate-200 p-4"
+                      className="rounded-xl border border-slate-200 p-4 dark:border-slate-700"
                       key={personKey}
                     >
-                      <legend className="px-1 text-sm font-semibold text-slate-700">
+                      <legend className="px-1 text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Person {index + 1}
                       </legend>
                       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -259,7 +364,7 @@ export function RetirementPlanForm({
           </div>
 
           <div>
-            <h3 className="mb-4 text-sm font-semibold text-slate-800">
+            <h3 className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">
               Cash and other assets
             </h3>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -278,40 +383,11 @@ export function RetirementPlanForm({
             </div>
           </div>
 
-          <div>
-            <h3 className="mb-4 text-sm font-semibold text-slate-800">
-              Mortgage
-            </h3>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <NumberField
-                error={errors.assets?.mortgage?.outstandingBalance?.message}
-                label="Outstanding balance"
-                name="assets.mortgage.outstandingBalance"
-                prefix="£"
-              />
-              <PercentageField
-                label="Interest rate"
-                min={0}
-                name="assets.mortgage.interestRate"
-              />
-              <NumberField
-                error={errors.assets?.mortgage?.monthlyPayment?.message}
-                label="Monthly payment"
-                name="assets.mortgage.monthlyPayment"
-                prefix="£"
-                suffix="/ month"
-              />
-              <NumberField
-                error={errors.assets?.mortgage?.mortgageEndAge?.message}
-                label="Mortgage end age"
-                max={120}
-                min={0}
-                name="assets.mortgage.mortgageEndAge"
-                step={1}
-                suffix="years"
-              />
-            </div>
-          </div>
+          <MortgageForm
+            currentAge={currentAge}
+            projection={projection}
+            retirementAge={retirementAge}
+          />
         </div>
       </FormSection>
 
@@ -324,17 +400,17 @@ export function RetirementPlanForm({
         <div className="space-y-6">
           <div
             aria-label="Income person"
-            className="flex gap-2 border-b border-slate-200"
+            className="flex gap-2 border-b border-slate-200 dark:border-slate-700"
             role="tablist"
           >
             {availablePeople.map((personKey, index) => (
               <button
                 aria-controls={`income-${personKey}-panel`}
                 aria-selected={activePerson === personKey}
-                className={`min-h-11 border-b-2 px-4 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
+                className={`min-h-11 border-b-2 px-4 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${
                   activePerson === personKey
-                    ? "border-emerald-700 text-emerald-900"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
+                    ? "border-teal-700 text-teal-900 dark:border-teal-400 dark:text-teal-200"
+                    : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
                 }`}
                 id={`income-${personKey}-tab`}
                 key={personKey}
@@ -381,7 +457,7 @@ export function RetirementPlanForm({
           >
             <section aria-labelledby={`${activePerson}-planning-ages`}>
               <h3
-                className="mb-4 text-sm font-semibold text-slate-800"
+                className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100"
                 id={`${activePerson}-planning-ages`}
               >
                 Planning ages
@@ -409,7 +485,7 @@ export function RetirementPlanForm({
             </section>
             <section aria-labelledby={`${activePerson}-employment`}>
               <h3
-                className="mb-4 text-sm font-semibold text-slate-800"
+                className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100"
                 id={`${activePerson}-employment`}
               >
                 Employment
@@ -443,7 +519,7 @@ export function RetirementPlanForm({
             </section>
             <section aria-labelledby={`${activePerson}-second-employment`}>
               <h3
-                className="mb-4 text-sm font-semibold text-slate-800"
+                className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100"
                 id={`${activePerson}-second-employment`}
               >
                 Second employment
@@ -488,7 +564,7 @@ export function RetirementPlanForm({
             </section>
             <section aria-labelledby={`${activePerson}-other-income`}>
               <h3
-                className="mb-4 text-sm font-semibold text-slate-800"
+                className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100"
                 id={`${activePerson}-other-income`}
               >
                 Other income
@@ -526,12 +602,15 @@ export function RetirementPlanForm({
             </section>
             <section aria-labelledby={`${activePerson}-tax-calculation`}>
               <h3
-                className="mb-4 text-sm font-semibold text-slate-800"
+                className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100"
                 id={`${activePerson}-tax-calculation`}
               >
                 Basic income tax calculation
               </h3>
-              <TaxBreakdown tax={personTaxes?.[activePerson]} />
+              <TaxBreakdown
+                marginalTaxInputs={marginalTaxInputs}
+                tax={personTaxes?.[activePerson]}
+              />
             </section>
           </div>
         </div>
@@ -552,7 +631,7 @@ export function RetirementPlanForm({
 
             return (
               <article
-                className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5"
+                className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5 dark:border-slate-700 dark:bg-slate-800/50"
                 key={field.fieldKey}
               >
                 <input
@@ -564,7 +643,7 @@ export function RetirementPlanForm({
                     className="block min-w-0 flex-1"
                     htmlFor={`bucket-${field.id}-name`}
                   >
-                    <span className="mb-1.5 block text-sm font-medium text-slate-700">
+                    <span className="form-label">
                       Category name
                     </span>
                     <input
@@ -574,11 +653,7 @@ export function RetirementPlanForm({
                           : undefined
                       }
                       aria-invalid={Boolean(bucketErrors?.name?.message)}
-                      className={`min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition hover:border-slate-400 focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10 ${
-                        bucketErrors?.name?.message
-                          ? "border-rose-500 focus:border-rose-600 focus:ring-rose-500/10"
-                          : ""
-                      }`}
+                      className="form-control"
                       id={`bucket-${field.id}-name`}
                       {...register(`${bucketPath}.name` as const)}
                     />
@@ -594,7 +669,7 @@ export function RetirementPlanForm({
                   </label>
                   <button
                     aria-label={`Remove ${bucketName}`}
-                    className="mt-6 flex size-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg text-slate-500 transition hover:border-rose-200 hover:text-rose-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="mt-6 flex size-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg text-slate-500 transition hover:border-rose-200 hover:text-rose-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
                     disabled={fields.length === 1}
                     onClick={() => remove(index)}
                     type="button"
@@ -637,7 +712,7 @@ export function RetirementPlanForm({
             );
           })}
           <button
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dashed border-emerald-300 px-4 text-sm font-semibold text-emerald-800 transition hover:border-emerald-500 hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dashed border-teal-300 px-4 text-sm font-semibold text-teal-800 transition hover:border-teal-500 hover:bg-teal-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 dark:border-teal-800 dark:text-teal-300 dark:hover:bg-teal-950/50"
             onClick={() =>
               append({
                 id: `custom-${crypto.randomUUID()}`,
@@ -667,13 +742,13 @@ export function RetirementPlanForm({
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <div>
             <label
-              className="mb-1.5 block text-sm font-medium text-slate-700"
+              className="form-label"
               htmlFor="tax-jurisdiction"
             >
               UK tax jurisdiction
             </label>
             <select
-              className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition hover:border-slate-400 focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10"
+              className="form-control"
               id="tax-jurisdiction"
               {...register("taxSettings.jurisdiction")}
             >
@@ -735,7 +810,7 @@ export function RetirementPlanForm({
             return (
               <div key={fieldName}>
                 <label
-                  className="mb-1.5 block text-sm font-medium text-slate-700"
+                  className="form-label"
                   htmlFor={`withdrawal-order-${index}`}
                 >
                   {index + 1}
@@ -744,11 +819,7 @@ export function RetirementPlanForm({
                 <select
                   aria-describedby={error ? `withdrawal-order-${index}-error` : undefined}
                   aria-invalid={Boolean(error)}
-                  className={`min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition hover:border-slate-400 focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10 ${
-                    error
-                      ? "border-rose-500 focus:border-rose-600 focus:ring-rose-500/10"
-                      : ""
-                  }`}
+                  className="form-control"
                   id={`withdrawal-order-${index}`}
                   {...register(fieldName)}
                 >

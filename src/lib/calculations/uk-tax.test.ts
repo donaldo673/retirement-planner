@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { TaxInputs } from "@/types/retirement";
-import { calculateUkTax } from "./uk-tax";
+import {
+  calculateMarginalEmploymentTaxRates,
+  calculateUkTax,
+} from "./uk-tax";
 
 function taxInputs(overrides: Partial<TaxInputs> = {}): TaxInputs {
   return {
@@ -66,6 +69,27 @@ test("employment income is not charged employee NI from State Pension age", () =
   );
 
   assert.equal(result.nationalInsurance, 0);
+});
+
+test("marginal employment rate includes income tax and applicable National Insurance", () => {
+  const belowStatePensionAge = calculateMarginalEmploymentTaxRates(
+    taxInputs({ employmentIncomes: [65_000] }),
+  );
+  const atStatePensionAge = calculateMarginalEmploymentTaxRates(
+    taxInputs({
+      age: 67,
+      employmentIncomes: [65_000],
+    }),
+  );
+
+  assert.ok(Math.abs(belowStatePensionAge.incomeTax - 0.4) < 1e-10);
+  assert.ok(
+    Math.abs(belowStatePensionAge.nationalInsurance - 0.02) < 1e-10,
+  );
+  assert.ok(Math.abs(belowStatePensionAge.combined - 0.42) < 1e-10);
+  assert.ok(Math.abs(atStatePensionAge.incomeTax - 0.4) < 1e-10);
+  assert.equal(atStatePensionAge.nationalInsurance, 0);
+  assert.ok(Math.abs(atStatePensionAge.combined - 0.4) < 1e-10);
 });
 
 test("savings and dividends use their allowances and current rates", () => {

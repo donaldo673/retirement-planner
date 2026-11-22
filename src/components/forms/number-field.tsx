@@ -47,7 +47,7 @@ export function NumberField({
         return (
           <div className="min-w-0">
             <label
-              className="mb-1.5 block text-sm font-medium text-slate-700"
+              className="form-label"
               htmlFor={id}
             >
               {label}
@@ -56,7 +56,7 @@ export function NumberField({
               {prefix ? (
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400"
+                  className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400 dark:text-slate-500"
                 >
                   {prefix}
                 </span>
@@ -66,12 +66,8 @@ export function NumberField({
                   [descriptionId, errorId].filter(Boolean).join(" ") || undefined
                 }
                 aria-invalid={Boolean(fieldError)}
-                className={`min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition hover:border-slate-400 focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10 ${
-                  prefix ? "pl-8" : ""
-                } ${suffix ? "pr-14" : ""} ${
-                  fieldError
-                    ? "border-rose-500 focus:border-rose-600 focus:ring-rose-500/10"
-                    : ""
+                className={`form-control ${prefix ? "form-control--prefix" : ""} ${
+                  suffix ? "form-control--suffix" : ""
                 }`}
                 id={id}
                 inputMode="decimal"
@@ -91,7 +87,7 @@ export function NumberField({
               {suffix ? (
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-400"
+                  className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-400 dark:text-slate-500"
                 >
                   {suffix}
                 </span>
@@ -99,7 +95,7 @@ export function NumberField({
             </div>
             {description ? (
               <p
-                className="mt-1.5 text-xs leading-5 text-slate-500"
+                className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400"
                 id={descriptionId}
               >
                 {description}

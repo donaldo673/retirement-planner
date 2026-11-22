@@ -15,7 +15,21 @@
     "src/lib/calculations/retirement-engine.ts",
     "src/lib/calculations/retirement-engine.test.ts",
     "src/lib/calculations/uk-tax.ts",
-    "src/lib/calculations/uk-tax.test.ts"
+    "src/lib/calculations/uk-tax.test.ts",
+    "src/types/insights.ts",
+    "src/lib/insights/planningFacts.ts",
+    "src/lib/insights/ruleBasedInsights.ts",
+    "src/lib/insights/generateInsights.ts",
+    "src/lib/insights/insights.test.ts",
+    "src/lib/mortgages/mortgagePreview.ts",
+    "src/lib/mortgages/mortgagePreview.test.ts",
+    "src/lib/validation/retirement-plan-schema.ts",
+    "src/types/financialStatements.ts",
+    "src/lib/financial-statements/buildProfitLossStatement.ts",
+    "src/lib/financial-statements/buildBalanceSheet.ts",
+    "src/lib/financial-statements/buildAccountMovements.ts",
+    "src/lib/financial-statements/buildAnnualStatement.ts",
+    "src/lib/financial-statements/buildAnnualStatement.test.ts"
   ],
   "exclude": ["node_modules", ".next"]
 }

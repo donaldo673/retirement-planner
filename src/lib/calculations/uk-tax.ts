@@ -30,6 +30,12 @@ interface TaxRules {
   capitalGainsHigherRate: number;
 }
 
+export interface MarginalEmploymentTaxRates {
+  incomeTax: number;
+  nationalInsurance: number;
+  combined: number;
+}
+
 const BASE_RULES: TaxRules = {
   personalAllowance: 12_570,
   personalAllowanceTaperStarts: 100_000,
@@ -365,5 +371,34 @@ export function calculateUkTax(inputs: TaxInputs): TaxResult {
     nationalInsurance,
     capitalGainsTax,
     totalTax: incomeTax + nationalInsurance + capitalGainsTax,
+  };
+}
+
+export function calculateMarginalEmploymentTaxRates(
+  inputs: TaxInputs,
+): MarginalEmploymentTaxRates {
+  const baseline = calculateUkTax(inputs);
+  const employmentIncomes = [...inputs.employmentIncomes];
+  const existingJobIndex = employmentIncomes.findIndex((income) => income > 0);
+  const jobIndex = existingJobIndex === -1 ? 0 : existingJobIndex;
+
+  if (employmentIncomes.length === 0) {
+    employmentIncomes.push(0);
+  }
+  employmentIncomes[jobIndex] += 1;
+
+  const withAdditionalPound = calculateUkTax({
+    ...inputs,
+    employmentIncomes,
+  });
+  const incomeTax =
+    withAdditionalPound.incomeTax - baseline.incomeTax;
+  const nationalInsurance =
+    withAdditionalPound.nationalInsurance - baseline.nationalInsurance;
+
+  return {
+    incomeTax,
+    nationalInsurance,
+    combined: incomeTax + nationalInsurance,
   };
 }
