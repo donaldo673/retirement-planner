@@ -1,5 +1,6 @@
 import type {
   Assumptions,
+  AccountProjectionBreakdown,
   ContributionBreakdown,
   ProjectionResult,
   ProjectionYear,
@@ -56,6 +57,7 @@ interface InvestmentIncome {
   dividends: number;
   capitalGrowth: number;
   totalGrowth: number;
+  byAccount: AccountProjectionBreakdown;
 }
 
 function assertFiniteNonNegative(label: string, value: number): void {
@@ -515,6 +517,18 @@ function createSnapshot(
     contributions: createZeroContributions(),
     withdrawals: createZeroWithdrawals(),
     unfundedShortfall: 0,
+    accountNetContributions: {
+      isa: 0,
+      pension: 0,
+      gia: 0,
+      cash: 0,
+    },
+    accountInvestmentIncome: {
+      isa: 0,
+      pension: 0,
+      gia: 0,
+      cash: 0,
+    },
     investmentGrowth: 0,
     netCashflow: 0,
     isaValue: sumPersonValues(balances.isa),
@@ -594,6 +608,12 @@ function calculateInvestmentGrowth(
         giaCapitalGrowth +
         interestIncome +
         giaDividends,
+      byAccount: {
+        isa: sumPersonValues(isaGrowth),
+        pension: sumPersonValues(pensionGrowth),
+        gia: giaInterest + giaDividends + giaCapitalGrowth,
+        cash: cashInterest,
+      },
     },
   };
 }
@@ -1008,6 +1028,7 @@ function simulateYear(
   let balances = balancesAfterGrowth;
   let unfundedShortfall = 0;
   let pensionDrawdownIncome = 0;
+  let cashNetContribution = 0;
 
   if (netCashflowBeforeWithdrawals > 0) {
     const contributionResult = addContributions(
@@ -1022,7 +1043,8 @@ function simulateYear(
       contributionBreakdown.isaContribution +
       contributionBreakdown.pensionContribution +
       contributionBreakdown.giaContribution;
-    balances.cash += netCashflowBeforeWithdrawals - totalContributions;
+    cashNetContribution = netCashflowBeforeWithdrawals - totalContributions;
+    balances.cash += cashNetContribution;
   } else if (netCashflowBeforeWithdrawals < 0) {
     const availableAssets =
       balancesAfterGrowth.cash +
@@ -1080,6 +1102,7 @@ function simulateYear(
       person1: withdrawals.byPerson.person1.pensionWithdrawal,
       person2: withdrawals.byPerson.person2.pensionWithdrawal,
     });
+    cashNetContribution = -withdrawals.cashWithdrawal;
     unfundedShortfall = Math.max(0, requiredNetFunds - evaluation.netFunds);
   }
 
@@ -1146,6 +1169,14 @@ function simulateYear(
     contributions: contributionBreakdown,
     withdrawals,
     unfundedShortfall,
+    accountNetContributions: {
+      isa: contributionBreakdown.isaContribution - withdrawals.isaWithdrawal,
+      pension:
+        contributionBreakdown.pensionContribution - withdrawals.pensionWithdrawal,
+      gia: contributionBreakdown.giaContribution - withdrawals.giaWithdrawal,
+      cash: cashNetContribution,
+    },
+    accountInvestmentIncome: growthResult.income.byAccount,
     investmentGrowth: growthResult.income.totalGrowth,
     netCashflow,
   };
@@ -1193,6 +1224,7 @@ function calculateFinancialIndependenceAge(
           dividends: projectionYear.dividendIncome,
           capitalGrowth: 0,
           totalGrowth: 0,
+          byAccount: { isa: 0, pension: 0, gia: 0, cash: 0 },
         },
         zeroWithdrawals,
         0,

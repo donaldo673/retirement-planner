@@ -27,6 +27,74 @@ test("projection includes an opening snapshot and all ages through life expectan
   );
 });
 
+test("projection reports account-level contributions and investment income", () => {
+  const plan = createSampleRetirementPlan();
+  plan.personalDetails = {
+    retirementAge: 66,
+    lifeExpectancy: 66,
+    householdType: "single",
+  };
+  plan.people.person1.income.currentAge = 65;
+  plan.people.person1.income.statePensionAge = 120;
+  plan.people.person1.income.employment = {
+    currentSalary: 30_000,
+    annualSalaryGrowthRate: 0,
+    workUntilAge: 66,
+  };
+  plan.people.person1.income.secondEmployment = {
+    currentSalary: 0,
+    annualSalaryGrowthRate: 0,
+    startAge: 65,
+    endAge: 66,
+  };
+  plan.people.person1.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
+  plan.people.person1.income.statePension = { annualAmount: 0 };
+  plan.people.person1.assets.isa = {
+    currentValue: 1_000,
+    monthlyContribution: 10,
+  };
+  plan.people.person1.assets.pension = {
+    currentValue: 2_000,
+    monthlyContribution: 20,
+  };
+  plan.assets.gia = {
+    currentValue: 3_000,
+    costBasis: 3_000,
+    monthlyContribution: 30,
+  };
+  plan.assets.cash.currentValue = 4_000;
+  plan.assets.otherAssets.currentValue = 0;
+  plan.assets.mortgage = {
+    outstandingBalance: 0,
+    interestRate: 0,
+    monthlyPayment: 0,
+    mortgageEndAge: 66,
+  };
+  plan.spending.buckets = [];
+  plan.assumptions = {
+    isaRealReturn: 0.1,
+    pensionRealReturn: 0.2,
+    giaInterestRealYield: 0.01,
+    giaDividendRealYield: 0.02,
+    giaCapitalGrowthRealYield: 0.03,
+    cashInterestRealYield: 0.04,
+    inflationRate: 0,
+  };
+
+  const year = calculateProjection(plan).yearlyResults[1];
+
+  assert.deepEqual(year.accountInvestmentIncome, {
+    isa: 100,
+    pension: 400,
+    gia: 180,
+    cash: 160,
+  });
+  assert.equal(year.accountNetContributions.isa, 120);
+  assert.equal(year.accountNetContributions.pension, 240);
+  assert.equal(year.accountNetContributions.gia, 360);
+  assert.ok(year.accountNetContributions.cash > 0);
+});
+
 test("deficits use the configured withdrawal order and report any shortfall", () => {
   const plan = createSampleRetirementPlan();
   plan.personalDetails = {
@@ -79,6 +147,8 @@ test("deficits use the configured withdrawal order and report any shortfall", ()
 
   assert.equal(firstRetirementYear.withdrawals.cashWithdrawal, 1_000);
   assert.equal(firstRetirementYear.withdrawals.giaWithdrawal, 500);
+  assert.equal(firstRetirementYear.accountNetContributions.cash, -1_000);
+  assert.equal(firstRetirementYear.accountNetContributions.gia, -500);
   assert.equal(firstRetirementYear.unfundedShortfall, 200);
   assert.equal(projection.summary.ageAssetsRunOut, 66);
   assert.equal(projection.summary.status, "red");

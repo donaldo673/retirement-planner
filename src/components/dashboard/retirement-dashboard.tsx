@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useMemo, useState } from "react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
+import { ProjectionCharts } from "@/components/dashboard/projection-charts";
 import { RetirementPlanForm } from "@/components/forms/retirement-plan-form";
 import { createSampleRetirementPlan } from "@/data/sample-plan";
 import { calculateProjection } from "@/lib/calculations/retirement-engine";
@@ -483,6 +484,7 @@ export function RetirementDashboard() {
                   realized gains, and taxable pension withdrawals. Estimates
                   do not include fees or investment volatility.
                 </p>
+                <ProjectionCharts yearlyResults={projection.yearlyResults} />
               </>
             ) : (
               <div

@@ -1,6 +1,7 @@
 {
   "name": "retirement-planner",
   "compatibility_date": "2026-11-21",
+  "previews": {},
   "assets": {
     "directory": "./out"
   }
