@@ -6,8 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "wrangler deploy",
     "lint": "eslint",
     "test": "tsc -p tsconfig.test.json && node --test .next/test-build/lib/calculations/retirement-engine.test.js .next/test-build/lib/calculations/uk-tax.test.js"
   },
@@ -20,7 +19,6 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@opennextjs/cloudflare": "^1.20.18",
     "@tailwindcss/turbopack": "4.3.3",
     "@types/node": "^20",
     "@types/react": "^19",
