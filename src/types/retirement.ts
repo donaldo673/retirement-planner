@@ -150,6 +150,13 @@ export interface WithdrawalBreakdown {
   >;
 }
 
+export interface AccountProjectionBreakdown {
+  isa: number;
+  pension: number;
+  gia: number;
+  cash: number;
+}
+
 export interface AnnualPersonIncome {
   age: number;
   salaryIncome: number;
@@ -190,6 +197,8 @@ export interface ProjectionYear {
   withdrawals: WithdrawalBreakdown;
   unfundedShortfall: number;
 
+  accountNetContributions: AccountProjectionBreakdown;
+  accountInvestmentIncome: AccountProjectionBreakdown;
   investmentGrowth: number;
   netCashflow: number;
 
