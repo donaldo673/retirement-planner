@@ -11,8 +11,15 @@ import {
 import { DashboardSummary } from "@/components/dashboard/DashboardSummary";
 import { ThemeToggle } from "@/components/dashboard/ThemeToggle";
 import { RetirementPlanForm } from "@/components/forms/retirement-plan-form";
+import { InsightsPanel } from "@/components/insights/InsightsPanel";
+import { PlanningMetrics } from "@/components/insights/PlanningMetrics";
+import { PotentialImprovements } from "@/components/insights/PotentialImprovements";
+import { RetirementHealth } from "@/components/insights/RetirementHealth";
+import { RetirementReadinessScore } from "@/components/insights/RetirementReadinessScore";
+import { RiskMonitor } from "@/components/insights/RiskMonitor";
 import { createSampleRetirementPlan } from "@/data/sample-plan";
 import { calculateProjection } from "@/lib/calculations/retirement-engine";
+import { analyzePlanning } from "@/lib/insights/generateInsights";
 import {
   retirementPlanSchema,
   savedPlanSchema,
@@ -287,6 +294,16 @@ export function RetirementDashboard() {
     const parsedPlan = retirementPlanSchema.safeParse(watchedPlan);
     return parsedPlan.success ? calculateProjection(parsedPlan.data) : null;
   }, [watchedPlan]);
+  const planningAnalysis = useMemo(() => {
+    if (!projection) {
+      return null;
+    }
+
+    const parsedPlan = retirementPlanSchema.safeParse(watchedPlan);
+    return parsedPlan.success
+      ? analyzePlanning({ plan: parsedPlan.data, projection })
+      : null;
+  }, [projection, watchedPlan]);
   const summary = projection?.summary;
   const firstProjectionYear = projection?.yearlyResults[1];
 
@@ -449,7 +466,7 @@ export function RetirementDashboard() {
               </p>
             </aside>
 
-            {summary && firstProjectionYear ? (
+            {summary && firstProjectionYear && planningAnalysis ? (
               <>
                 <DashboardSummary
                   currentAge={form.getValues("people.person1.income.currentAge")}
@@ -464,6 +481,16 @@ export function RetirementDashboard() {
                   summary={summary}
                   yearlyResults={projection.yearlyResults}
                 />
+                <RetirementReadinessScore
+                  readiness={planningAnalysis.readiness}
+                />
+                <RetirementHealth assessments={planningAnalysis.health} />
+                <PlanningMetrics metrics={planningAnalysis.metrics} />
+                <InsightsPanel insights={planningAnalysis.insights} />
+                <PotentialImprovements
+                  opportunities={planningAnalysis.opportunities}
+                />
+                <RiskMonitor risks={planningAnalysis.risks} />
               </>
             ) : (
               <div
