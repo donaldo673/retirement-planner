@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 import {
@@ -9,7 +10,6 @@ import {
 } from "@/components/dashboard/DashboardIcon";
 import { DashboardSummary } from "@/components/dashboard/DashboardSummary";
 import { ThemeToggle } from "@/components/dashboard/ThemeToggle";
-import { ProjectionCharts } from "@/components/dashboard/projection-charts";
 import { RetirementPlanForm } from "@/components/forms/retirement-plan-form";
 import { createSampleRetirementPlan } from "@/data/sample-plan";
 import { calculateProjection } from "@/lib/calculations/retirement-engine";
@@ -18,6 +18,22 @@ import {
   savedPlanSchema,
 } from "@/lib/validation/retirement-plan-schema";
 import type { RetirementPlan, SavedPlan } from "@/types/retirement";
+
+const ChartDashboard = dynamic(
+  () =>
+    import("@/components/charts/ChartDashboard").then(
+      (module) => module.ChartDashboard,
+    ),
+  {
+    loading: () => (
+      <div
+        aria-label="Loading projection charts"
+        className="mt-8 h-80 animate-pulse rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
+        role="status"
+      />
+    ),
+  },
+);
 
 const SAVED_PLAN_STORAGE_KEY = "retirement-planner:saved-plan";
 
@@ -441,7 +457,13 @@ export function RetirementDashboard() {
                   retirementAge={form.getValues("personalDetails.retirementAge")}
                   summary={summary}
                 />
-                <ProjectionCharts yearlyResults={projection.yearlyResults} />
+                <ChartDashboard
+                  currentAge={form.getValues("people.person1.income.currentAge")}
+                  lifeExpectancy={form.getValues("personalDetails.lifeExpectancy")}
+                  retirementAge={form.getValues("personalDetails.retirementAge")}
+                  summary={summary}
+                  yearlyResults={projection.yearlyResults}
+                />
               </>
             ) : (
               <div
