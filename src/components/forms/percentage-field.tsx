@@ -30,7 +30,7 @@ export function PercentageField({
         const errorId = fieldState.error ? `${id}-error` : undefined;
         const displayValue =
           typeof field.value === "number" && Number.isFinite(field.value)
-            ? field.value * 100
+            ? Number((field.value * 100).toPrecision(15))
             : "";
 
         return (
