@@ -1,16 +1,16 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "retirement-planner",
-  "main": ".open-next/worker.js",
+ 
   "upload_source_maps": true,
   "compatibility_date": "2026-11-21",
   "compatibility_flags": ["nodejs_compat"],
   "previews": {},
   "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
+    "directory": "./out"
   },
   "observability": {
     "enabled": true
   }
 }
+
