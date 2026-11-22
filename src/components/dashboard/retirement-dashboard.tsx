@@ -17,6 +17,7 @@ import { PotentialImprovements } from "@/components/insights/PotentialImprovemen
 import { RetirementHealth } from "@/components/insights/RetirementHealth";
 import { RetirementReadinessScore } from "@/components/insights/RetirementReadinessScore";
 import { RiskMonitor } from "@/components/insights/RiskMonitor";
+import { ScenarioWorkspace } from "@/components/scenarios/ScenarioWorkspace";
 import { createSampleRetirementPlan } from "@/data/sample-plan";
 import { calculateProjection } from "@/lib/calculations/retirement-engine";
 import { analyzePlanning } from "@/lib/insights/generateInsights";
@@ -55,6 +56,12 @@ const plannerSections: {
   icon: DashboardIconName;
 }[] = [
   { id: "overview", href: "#overview", label: "Dashboard", icon: "dashboard" },
+  {
+    id: "scenario-manager",
+    href: "#scenario-manager",
+    label: "Scenarios",
+    icon: "chart",
+  },
   {
     id: "personal",
     href: "#personal",
@@ -290,20 +297,22 @@ export function RetirementDashboard() {
     return () => window.clearTimeout(timeoutId);
   }, [canSavePlan, watchedPlan]);
 
-  const projection = useMemo(() => {
-    const parsedPlan = retirementPlanSchema.safeParse(watchedPlan);
-    return parsedPlan.success ? calculateProjection(parsedPlan.data) : null;
-  }, [watchedPlan]);
+  const parsedPlan = useMemo(
+    () => retirementPlanSchema.safeParse(watchedPlan),
+    [watchedPlan],
+  );
+  const projection = useMemo(
+    () =>
+      parsedPlan.success ? calculateProjection(parsedPlan.data) : null,
+    [parsedPlan],
+  );
   const planningAnalysis = useMemo(() => {
-    if (!projection) {
+    if (!projection || !parsedPlan.success) {
       return null;
     }
 
-    const parsedPlan = retirementPlanSchema.safeParse(watchedPlan);
-    return parsedPlan.success
-      ? analyzePlanning({ plan: parsedPlan.data, projection })
-      : null;
-  }, [projection, watchedPlan]);
+    return analyzePlanning({ plan: parsedPlan.data, projection });
+  }, [parsedPlan, projection]);
   const summary = projection?.summary;
   const firstProjectionYear = projection?.yearlyResults[1];
 
@@ -466,7 +475,11 @@ export function RetirementDashboard() {
               </p>
             </aside>
 
-            {summary && firstProjectionYear && planningAnalysis ? (
+            {summary &&
+            projection &&
+            firstProjectionYear &&
+            planningAnalysis &&
+            parsedPlan.success ? (
               <>
                 <DashboardSummary
                   currentAge={form.getValues("people.person1.income.currentAge")}
@@ -474,23 +487,44 @@ export function RetirementDashboard() {
                   retirementAge={form.getValues("personalDetails.retirementAge")}
                   summary={summary}
                 />
-                <ChartDashboard
-                  currentAge={form.getValues("people.person1.income.currentAge")}
-                  lifeExpectancy={form.getValues("personalDetails.lifeExpectancy")}
-                  retirementAge={form.getValues("personalDetails.retirementAge")}
-                  summary={summary}
-                  yearlyResults={projection.yearlyResults}
-                />
-                <RetirementReadinessScore
-                  readiness={planningAnalysis.readiness}
-                />
-                <RetirementHealth assessments={planningAnalysis.health} />
-                <PlanningMetrics metrics={planningAnalysis.metrics} />
-                <InsightsPanel insights={planningAnalysis.insights} />
-                <PotentialImprovements
-                  opportunities={planningAnalysis.opportunities}
-                />
-                <RiskMonitor risks={planningAnalysis.risks} />
+                <ScenarioWorkspace
+                  analysis={planningAnalysis}
+                  currentPlanChanged={form.formState.isDirty}
+                  isPlanLoading={persistenceStatus.kind === "loading"}
+                  onLoadPlan={(plan) => reset(plan)}
+                  plan={parsedPlan.data}
+                  projection={projection}
+                >
+                  {({ scenarioSeries, scenarioPanel }) => (
+                    <>
+                      <ChartDashboard
+                        currentAge={form.getValues(
+                          "people.person1.income.currentAge",
+                        )}
+                        lifeExpectancy={form.getValues(
+                          "personalDetails.lifeExpectancy",
+                        )}
+                        retirementAge={form.getValues(
+                          "personalDetails.retirementAge",
+                        )}
+                        scenarioSeries={scenarioSeries}
+                        summary={summary}
+                        yearlyResults={projection.yearlyResults}
+                      />
+                      <RetirementReadinessScore
+                        readiness={planningAnalysis.readiness}
+                      />
+                      <RetirementHealth assessments={planningAnalysis.health} />
+                      <PlanningMetrics metrics={planningAnalysis.metrics} />
+                      <InsightsPanel insights={planningAnalysis.insights} />
+                      <PotentialImprovements
+                        opportunities={planningAnalysis.opportunities}
+                      />
+                      <RiskMonitor risks={planningAnalysis.risks} />
+                      {scenarioPanel}
+                    </>
+                  )}
+                </ScenarioWorkspace>
               </>
             ) : (
               <div

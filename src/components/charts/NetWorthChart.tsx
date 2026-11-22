@@ -20,6 +20,7 @@ import {
   formatCompactChartCurrency,
 } from "@/lib/charts/formatChartCurrency";
 import type { ChartRange, ProjectionPoint } from "@/types/charts";
+import type { ScenarioChartSeries } from "@/types/scenarios";
 
 interface NetWorthChartProps {
   data: ProjectionPoint[];
@@ -27,6 +28,17 @@ interface NetWorthChartProps {
   retirementAge: number;
   financialIndependenceAge: number | null;
   lifeExpectancy: number;
+  scenarioSeries?: ScenarioChartSeries[];
+}
+
+interface NetWorthChartPoint {
+  age: number;
+  netWorth?: number;
+  [key: string]: number | undefined;
+}
+
+function getScenarioDataKey(index: number): string {
+  return `scenario_${index}`;
 }
 
 const rangeOptions: { value: ChartRange; label: string }[] = [
@@ -42,25 +54,59 @@ export function NetWorthChart({
   retirementAge,
   financialIndependenceAge,
   lifeExpectancy,
+  scenarioSeries = [],
 }: NetWorthChartProps) {
   const [range, setRange] = useState<ChartRange>("all");
+  const [selectedScenarioIds, setSelectedScenarioIds] = useState<
+    string[] | null
+  >(null);
+  const visibleScenarioIds =
+    selectedScenarioIds ?? scenarioSeries.slice(0, 2).map(({ id }) => id);
+  const chartData = useMemo(() => {
+    const pointsByAge = new Map<number, NetWorthChartPoint>();
+    const addPoint = (age: number, dataKey: string, value: number) => {
+      const point = pointsByAge.get(age) ?? { age };
+      point[dataKey] = value;
+      pointsByAge.set(age, point);
+    };
+
+    data.forEach((point) => addPoint(point.age, "netWorth", point.netWorth));
+    scenarioSeries.forEach((scenario, index) => {
+      scenario.data.forEach((point) =>
+        addPoint(point.age, getScenarioDataKey(index), point.netWorth),
+      );
+    });
+
+    return [...pointsByAge.values()].sort((first, second) => first.age - second.age);
+  }, [data, scenarioSeries]);
   const visibleData = useMemo(() => {
-    if (range === "all" || data.length === 0) {
-      return data;
+    if (range === "all" || chartData.length === 0) {
+      return chartData;
     }
 
-    const finalAge = data[0].age + Number(range);
-    return data.filter((point) => point.age <= finalAge);
-  }, [data, range]);
+    const finalAge = currentAge + Number(range);
+    return chartData.filter(
+      (point) => point.age >= currentAge && point.age <= finalAge,
+    );
+  }, [chartData, currentAge, range]);
   const minAge = visibleData[0]?.age ?? currentAge;
   const maxAge = visibleData.at(-1)?.age ?? currentAge;
+  const visibleNetWorthValues = visibleData
+    .map((point) => point.netWorth)
+    .filter((value): value is number => value !== undefined);
   const canShowMarker = (age: number) => age >= minAge && age <= maxAge;
+  const selectedSeries = scenarioSeries
+    .map((scenario, index) => ({
+      ...scenario,
+      dataKey: getScenarioDataKey(index),
+    }))
+    .filter((scenario) => visibleScenarioIds.includes(scenario.id));
 
   return (
     <ChartCard
       className="h-full"
       controls={
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        <div className="flex max-w-full flex-wrap items-center gap-2 sm:justify-end">
           <div
             aria-label="Projection range"
             className="flex rounded-lg border border-slate-200 p-0.5 dark:border-slate-700"
@@ -103,6 +149,42 @@ export function NetWorthChart({
               Inflation adjusted
             </button>
           </div>
+          {scenarioSeries.length > 0 && (
+            <fieldset className="basis-full rounded-lg border border-slate-200 px-2 py-1.5 dark:border-slate-700">
+              <legend className="px-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                Compare scenarios
+              </legend>
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                {scenarioSeries.map((scenario) => (
+                  <label
+                    className="flex min-h-7 max-w-full items-center gap-1.5 text-xs text-slate-700 dark:text-slate-200"
+                    key={scenario.id}
+                  >
+                    <input
+                      checked={visibleScenarioIds.includes(scenario.id)}
+                      onChange={(event) =>
+                        setSelectedScenarioIds((current) => {
+                          const selected =
+                            current ??
+                            scenarioSeries.slice(0, 2).map(({ id }) => id);
+                          return event.target.checked
+                            ? [...selected, scenario.id]
+                            : selected.filter((id) => id !== scenario.id);
+                        })
+                      }
+                      type="checkbox"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: scenario.color }}
+                    />
+                    <span className="max-w-40 truncate">{scenario.name}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
         </div>
       }
       description="Projected net worth in future pounds, with key planning ages marked."
@@ -170,7 +252,7 @@ export function NetWorthChart({
               fill="url(#net-worth-gradient)"
               isAnimationActive
               legendType="none"
-              name="Net worth"
+              name="Current Plan"
               stroke="none"
               type="monotone"
             />
@@ -180,11 +262,25 @@ export function NetWorthChart({
               dot={false}
               isAnimationActive
               legendType="line"
-              name="Net worth"
+              name="Current Plan"
               stroke="var(--chart-primary-line)"
               strokeWidth={2.5}
               type="monotone"
             />
+            {selectedSeries.map((scenario) => (
+              <Line
+                animationDuration={650}
+                connectNulls={false}
+                dataKey={scenario.dataKey}
+                dot={false}
+                isAnimationActive
+                key={scenario.id}
+                name={scenario.name}
+                stroke={scenario.color}
+                strokeWidth={2}
+                type="monotone"
+              />
+            ))}
             {canShowMarker(currentAge) && (
               <ReferenceLine
                 label={{
@@ -243,11 +339,11 @@ export function NetWorthChart({
       </div>
       <p className="sr-only">
         Net worth values range from {formatChartCurrency(
-          Math.min(...visibleData.map((point) => point.netWorth), 0),
+          Math.min(...visibleNetWorthValues, 0),
         )}{" "}
         to{" "}
         {formatChartCurrency(
-          Math.max(...visibleData.map((point) => point.netWorth), 0),
+          Math.max(...visibleNetWorthValues, 0),
         )}
         . Vertical markers show today, financial independence when reached,
         retirement, and life expectancy when they are within the selected range.

@@ -9,6 +9,7 @@ import { transformAssetAllocationData } from "@/lib/charts/transformAssetAllocat
 import { transformCashflowData } from "@/lib/charts/transformCashflowData";
 import { transformNetWorthData } from "@/lib/charts/transformNetWorthData";
 import { transformTaxData } from "@/lib/charts/transformTaxData";
+import type { ScenarioChartSeries } from "@/types/scenarios";
 import type { ProjectionYear, RetirementSummary } from "@/types/retirement";
 
 interface ChartDashboardProps {
@@ -17,6 +18,7 @@ interface ChartDashboardProps {
   currentAge: number;
   retirementAge: number;
   lifeExpectancy: number;
+  scenarioSeries?: ScenarioChartSeries[];
 }
 
 export function ChartDashboard({
@@ -25,6 +27,7 @@ export function ChartDashboard({
   currentAge,
   retirementAge,
   lifeExpectancy,
+  scenarioSeries = [],
 }: ChartDashboardProps) {
   const netWorthData = useMemo(
     () => transformNetWorthData(yearlyResults),
@@ -71,6 +74,7 @@ export function ChartDashboard({
           financialIndependenceAge={summary.financialIndependenceAge}
           lifeExpectancy={lifeExpectancy}
           retirementAge={retirementAge}
+          scenarioSeries={scenarioSeries}
         />
         <AssetBreakdownChart data={assetAllocationData} />
         <div className="grid min-w-0 gap-4 lg:grid-cols-2">
