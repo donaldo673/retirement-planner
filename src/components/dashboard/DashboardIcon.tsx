@@ -9,6 +9,7 @@ export type DashboardIconName =
   | "check"
   | "close"
   | "dashboard"
+  | "document"
   | "home"
   | "menu"
   | "moon"
@@ -62,6 +63,12 @@ const iconContent: Record<DashboardIconName, ReactNode> = {
       <rect x="13" y="3" width="8" height="5" rx="1.5" />
       <rect x="13" y="10" width="8" height="11" rx="1.5" />
       <rect x="3" y="13" width="8" height="8" rx="1.5" />
+    </>
+  ),
+  document: (
+    <>
+      <path d="M7 3.5h7l4 4V20a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" />
+      <path d="M14 3.5v5h5M9 12h6M9 15.5h6M9 19h4" />
     </>
   ),
   home: (

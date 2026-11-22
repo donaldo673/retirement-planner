@@ -8,7 +8,7 @@
     "start": "next start",
     "deploy": "wrangler deploy",
     "lint": "eslint",
-    "test": "tsc -p tsconfig.test.json && node --test .next/test-build/lib/calculations/retirement-engine.test.js .next/test-build/lib/calculations/uk-tax.test.js .next/test-build/lib/insights/insights.test.js"
+    "test": "tsc -p tsconfig.test.json && node --test .next/test-build/lib/calculations/retirement-engine.test.js .next/test-build/lib/calculations/uk-tax.test.js .next/test-build/lib/insights/insights.test.js .next/test-build/lib/mortgages/mortgagePreview.test.js .next/test-build/lib/financial-statements/buildAnnualStatement.test.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^7.0.7",

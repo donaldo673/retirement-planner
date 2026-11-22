@@ -9,6 +9,7 @@ interface PercentageFieldProps {
   name: NumericFieldName;
   label: string;
   min?: number;
+  max?: number;
   description?: string;
 }
 
@@ -16,6 +17,7 @@ export function PercentageField({
   name,
   label,
   min = -100,
+  max,
   description,
 }: PercentageFieldProps) {
   const { control } = useFormContext<RetirementPlan>();
@@ -51,6 +53,7 @@ export function PercentageField({
                 id={id}
                 inputMode="decimal"
                 min={min}
+                max={max}
                 onBlur={field.onBlur}
                 onChange={(event) => {
                   const rawValue = event.target.value;

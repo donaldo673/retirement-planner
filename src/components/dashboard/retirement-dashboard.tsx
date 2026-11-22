@@ -9,6 +9,7 @@ import {
   type DashboardIconName,
 } from "@/components/dashboard/DashboardIcon";
 import { DashboardSummary } from "@/components/dashboard/DashboardSummary";
+import { FinancialStatementsPage } from "@/components/financial-statements/FinancialStatementsPage";
 import { ThemeToggle } from "@/components/dashboard/ThemeToggle";
 import { RetirementPlanForm } from "@/components/forms/retirement-plan-form";
 import { InsightsPanel } from "@/components/insights/InsightsPanel";
@@ -61,6 +62,12 @@ const plannerSections: {
     href: "#scenario-manager",
     label: "Scenarios",
     icon: "chart",
+  },
+  {
+    id: "financial-statements",
+    href: "#financial-statements",
+    label: "Financial Statements",
+    icon: "document",
   },
   {
     id: "personal",
@@ -536,6 +543,11 @@ export function RetirementDashboard() {
             )}
           </section>
 
+          <FinancialStatementsPage
+            plan={parsedPlan.success ? parsedPlan.data : null}
+            projection={projection}
+          />
+
           <section
             aria-labelledby="plan-inputs-heading"
             className="mb-5 mt-10 scroll-mt-24 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"
@@ -565,6 +577,8 @@ export function RetirementDashboard() {
             >
               <RetirementPlanForm
                 personTaxes={firstProjectionYear?.personTaxes}
+                projection={projection}
+                projectionYear={firstProjectionYear}
               />
             </form>
           </FormProvider>

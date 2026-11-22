@@ -5,9 +5,15 @@ import { useState } from "react";
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 import { NumberField } from "@/components/forms/number-field";
 import { PercentageField } from "@/components/forms/percentage-field";
+import { MortgageForm } from "@/components/mortgages/MortgageForm";
+import { calculateMarginalEmploymentTaxRates } from "@/lib/calculations/uk-tax";
 import type {
+  AnnualPersonIncome,
   PersonKey,
+  ProjectionResult,
+  ProjectionYear,
   RetirementPlan,
+  TaxInputs,
   TaxResult,
   WithdrawalSource,
 } from "@/types/retirement";
@@ -62,7 +68,13 @@ const withdrawalSources: { value: WithdrawalSource; label: string }[] = [
   { value: "pension", label: "Pension" },
 ];
 
-function TaxBreakdown({ tax }: { tax?: TaxResult }) {
+function TaxBreakdown({
+  tax,
+  marginalTaxInputs,
+}: {
+  tax?: TaxResult;
+  marginalTaxInputs?: TaxInputs;
+}) {
   if (!tax) {
     return (
       <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -80,29 +92,91 @@ function TaxBreakdown({ tax }: { tax?: TaxResult }) {
     ["Capital gains tax", tax.capitalGainsTax],
     ["Total tax", tax.totalTax],
   ] as const;
+  const marginalRates = marginalTaxInputs
+    ? calculateMarginalEmploymentTaxRates(marginalTaxInputs)
+    : null;
 
   return (
-    <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      {rows.map(([label, amount]) => (
-        <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70" key={label}>
-          <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</dt>
-          <dd className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
-            {new Intl.NumberFormat("en-GB", {
-              style: "currency",
-              currency: "GBP",
-              maximumFractionDigits: 0,
-            }).format(amount)}
-          </dd>
+    <div className="space-y-3">
+      <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {rows.map(([label, amount]) => (
+          <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70" key={label}>
+            <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</dt>
+            <dd className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+              {new Intl.NumberFormat("en-GB", {
+                style: "currency",
+                currency: "GBP",
+                maximumFractionDigits: 0,
+              }).format(amount)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {marginalRates && (
+        <div
+          aria-label="Marginal tax rate including income tax and National Insurance"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 p-4 dark:border-teal-900 dark:bg-teal-950/30"
+          role="group"
+        >
+          <div>
+            <p className="text-sm font-semibold text-teal-950 dark:text-teal-100">
+              Marginal Rate on Additional Earnings
+            </p>
+            <p className="mt-1 text-xs leading-5 text-teal-900 dark:text-teal-200">
+              Income tax{" "}
+              {formatPercentage(marginalRates.incomeTax)} + National Insurance{" "}
+              {formatPercentage(marginalRates.nationalInsurance)} on the next
+              £1 earned through an existing job.
+            </p>
+          </div>
+          <p className="text-2xl font-semibold tabular-nums text-teal-950 dark:text-teal-100">
+            {formatPercentage(marginalRates.combined)}
+          </p>
         </div>
-      ))}
-    </dl>
+      )}
+    </div>
   );
+}
+
+function formatPercentage(rate: number): string {
+  return new Intl.NumberFormat("en-GB", {
+    style: "percent",
+    maximumFractionDigits: 1,
+  }).format(rate);
+}
+
+function createMarginalTaxInputs(
+  taxYear: number,
+  income: AnnualPersonIncome,
+  statePensionAge: number,
+  inflationRate: number,
+  jurisdiction: RetirementPlan["taxSettings"]["jurisdiction"],
+): TaxInputs {
+  return {
+    taxYear,
+    inflationRate,
+    jurisdiction,
+    age: income.age,
+    statePensionAge,
+    employmentIncomes: [income.salaryIncome, income.secondSalaryIncome],
+    rentalProfit: income.rentalIncome,
+    otherTaxableIncome: income.otherIncomeAmount,
+    pensionIncome: income.pensionDrawdownIncome,
+    statePensionIncome: income.statePensionIncome,
+    savingsInterest: Math.max(0, income.interestIncome),
+    dividendIncome: Math.max(0, income.dividendIncome),
+    capitalGains: income.realizedCapitalGains,
+  };
 }
 
 export function RetirementPlanForm({
   personTaxes,
+  projection,
+  projectionYear,
 }: {
   personTaxes?: Record<PersonKey, TaxResult>;
+  projection?: ProjectionResult | null;
+  projectionYear?: ProjectionYear;
 }) {
   const {
     control,
@@ -113,12 +187,43 @@ export function RetirementPlanForm({
     control,
     name: "personalDetails.householdType",
   });
+  const currentAge = useWatch({
+    control,
+    name: "people.person1.income.currentAge",
+  });
+  const retirementAge = useWatch({
+    control,
+    name: "personalDetails.retirementAge",
+  });
   const [selectedPerson, setSelectedPerson] = useState<PersonKey>("person1");
   const activePerson =
     householdType === "joint" ? selectedPerson : "person1";
+  const activeStatePensionAge = useWatch({
+    control,
+    name: `people.${activePerson}.income.statePensionAge`,
+  });
+  const inflationRate = useWatch({
+    control,
+    name: "assumptions.inflationRate",
+  });
+  const jurisdiction = useWatch({
+    control,
+    name: "taxSettings.jurisdiction",
+  });
   const availablePeople: PersonKey[] =
     householdType === "joint" ? ["person1", "person2"] : ["person1"];
   const personIncomeErrors = errors.people?.[activePerson]?.income;
+  const activePersonIncome = projectionYear?.personIncomes[activePerson];
+  const marginalTaxInputs =
+    projectionYear && activePersonIncome
+      ? createMarginalTaxInputs(
+          projectionYear.taxYear,
+          activePersonIncome,
+          activeStatePensionAge,
+          inflationRate,
+          jurisdiction,
+        )
+      : undefined;
   const { fields, append, remove } = useFieldArray({
     control,
     keyName: "fieldKey",
@@ -278,40 +383,11 @@ export function RetirementPlanForm({
             </div>
           </div>
 
-          <div>
-            <h3 className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">
-              Mortgage
-            </h3>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <NumberField
-                error={errors.assets?.mortgage?.outstandingBalance?.message}
-                label="Outstanding balance"
-                name="assets.mortgage.outstandingBalance"
-                prefix="£"
-              />
-              <PercentageField
-                label="Interest rate"
-                min={0}
-                name="assets.mortgage.interestRate"
-              />
-              <NumberField
-                error={errors.assets?.mortgage?.monthlyPayment?.message}
-                label="Monthly payment"
-                name="assets.mortgage.monthlyPayment"
-                prefix="£"
-                suffix="/ month"
-              />
-              <NumberField
-                error={errors.assets?.mortgage?.mortgageEndAge?.message}
-                label="Mortgage end age"
-                max={120}
-                min={0}
-                name="assets.mortgage.mortgageEndAge"
-                step={1}
-                suffix="years"
-              />
-            </div>
-          </div>
+          <MortgageForm
+            currentAge={currentAge}
+            projection={projection}
+            retirementAge={retirementAge}
+          />
         </div>
       </FormSection>
 
@@ -531,7 +607,10 @@ export function RetirementPlanForm({
               >
                 Basic income tax calculation
               </h3>
-              <TaxBreakdown tax={personTaxes?.[activePerson]} />
+              <TaxBreakdown
+                marginalTaxInputs={marginalTaxInputs}
+                tax={personTaxes?.[activePerson]}
+              />
             </section>
           </div>
         </div>

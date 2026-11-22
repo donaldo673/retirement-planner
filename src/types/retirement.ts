@@ -40,6 +40,57 @@ export interface Mortgage {
   mortgageEndAge: number;
 }
 
+export type MortgageType = "residential" | "buy-to-let";
+
+export type MortgageRateMethod =
+  | "base-plus-margin"
+  | "keep-current-rate"
+  | "manual-rate";
+
+export type MortgageRepaymentType = "repayment" | "interest-only";
+
+export type MortgageRepaymentStrategy =
+  | "sale-of-property"
+  | "investments"
+  | "pension-lump-sum"
+  | "other";
+
+export interface MortgageConfiguration {
+  name: string;
+  type: MortgageType;
+  currentFixedRate: number;
+  fixedMonthsRemaining: number;
+  assumeRemortgage: boolean;
+  futureRateMethod: MortgageRateMethod;
+  baseRate: number;
+  margin: number;
+  futureMortgageRate: number;
+  monthlyOverpayment: number;
+  annualLumpSumOverpayment: number;
+  repaymentType: MortgageRepaymentType;
+  repaymentStrategy: MortgageRepaymentStrategy;
+  rentalIncome: number;
+  managementCosts: number;
+  maintenanceCosts: number;
+  voidPeriodAllowance: number;
+}
+
+export type PropertyType =
+  | "main-residence"
+  | "buy-to-let"
+  | "holiday-home"
+  | "second-property";
+
+export interface PropertyInformation {
+  estimatedValue: number;
+  type: PropertyType;
+  expectedGrowthRate: number;
+  futureSaleAge: number;
+  downsizeAge: number;
+  equityReleaseAge: number;
+  notes: string;
+}
+
 export interface Assets {
   gia: GeneralInvestmentAccount;
   cash: CashAccount;
@@ -122,6 +173,8 @@ export interface RetirementPlan {
   personalDetails: PersonalDetails;
   people: Record<PersonKey, PersonPlan>;
   assets: Assets;
+  mortgageConfiguration: MortgageConfiguration;
+  propertyInformation: PropertyInformation;
   spending: SpendingPlan;
   assumptions: Assumptions;
   taxSettings: TaxSettings;
