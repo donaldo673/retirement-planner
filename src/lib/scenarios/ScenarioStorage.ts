@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ScenarioRecord } from "@/types/scenarios";
-import { retirementPlanSchema } from "../validation/retirement-plan-schema";
+import { storedRetirementPlanSchema } from "../validation/retirement-plan-schema";
 
 export const SCENARIO_STORAGE_VERSION = 1;
 export const SCENARIO_STORAGE_KEY = "retirement-planner:scenarios";
@@ -10,7 +10,7 @@ const scenarioRecordSchema = z.object({
   name: z.string().trim().min(1).max(80),
   description: z.string().max(500).optional(),
   createdAt: z.iso.datetime(),
-  inputs: z.object({ plan: retirementPlanSchema }),
+  inputs: z.object({ plan: storedRetirementPlanSchema }),
 });
 
 const storageEnvelopeSchema = z.object({

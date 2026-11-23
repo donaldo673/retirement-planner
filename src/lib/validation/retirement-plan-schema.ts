@@ -4,7 +4,9 @@ const ageSchema = z.number().int().min(0);
 const moneySchema = z.number().finite().min(0);
 const rateSchema = z.number().finite().min(-1);
 const nonNegativeRateSchema = z.number().finite().min(0).max(1);
-const withdrawalSources = ["cash", "gia", "isa", "pension"] as const;
+const accountTypes = ["cash", "gia", "isa", "pension"] as const;
+const defaultAccumulationPriority = ["pension", "isa", "gia", "cash"] as const;
+const defaultWithdrawalPriority = ["cash", "gia", "isa", "pension"] as const;
 
 const defaultMortgageConfiguration = {
   name: "Main residence",
@@ -137,7 +139,7 @@ const spendingBucketSchema = z.object({
   endAge: ageSchema,
 });
 
-export const retirementPlanSchema = z
+const retirementPlanObjectSchema = z
   .object({
     personalDetails: z.object({
       retirementAge: ageSchema,
@@ -182,9 +184,16 @@ export const retirementPlanSchema = z
         "wales",
         "northern-ireland",
       ]),
+      minimumCashReserve: moneySchema,
+      optimiseTaxAutomatically: z.boolean(),
+      accumulationPriority: z
+        .array(z.enum(accountTypes))
+        .length(accountTypes.length),
+      withdrawalPriority: z
+        .array(z.enum(accountTypes))
+        .length(accountTypes.length),
     }),
     scenario: z.enum(["conservative", "expected", "optimistic"]),
-    withdrawalOrder: z.array(z.enum(withdrawalSources)).length(4),
   })
   .superRefine((plan, context) => {
     const { retirementAge, lifeExpectancy } = plan.personalDetails;
@@ -254,35 +263,68 @@ export const retirementPlanSchema = z
       }
     }
 
-    const sources = new Set(plan.withdrawalOrder);
-    if (sources.size !== withdrawalSources.length) {
-      plan.withdrawalOrder.forEach((source, index) => {
-        if (plan.withdrawalOrder.indexOf(source) !== index) {
-          context.addIssue({
-            code: "custom",
-            path: ["withdrawalOrder", index],
-            message: "Choose each withdrawal source once.",
-          });
-        }
-      });
+    for (const priorityName of [
+      "accumulationPriority",
+      "withdrawalPriority",
+    ] as const) {
+      const priority = plan.taxSettings[priorityName];
+      const sources = new Set(priority);
+      if (sources.size !== accountTypes.length) {
+        priority.forEach((source, index) => {
+          if (priority.indexOf(source) !== index) {
+            context.addIssue({
+              code: "custom",
+              path: ["taxSettings", priorityName, index],
+              message: "Choose each account type once.",
+            });
+          }
+        });
+      }
     }
   });
+
+export const retirementPlanSchema = retirementPlanObjectSchema;
+
+function addStoredPlanDefaults(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return value;
+  }
+
+  const plan = value as Record<string, unknown>;
+  const taxSettings =
+    typeof plan.taxSettings === "object" &&
+    plan.taxSettings !== null &&
+    !Array.isArray(plan.taxSettings)
+      ? (plan.taxSettings as Record<string, unknown>)
+      : {};
+  return {
+    ...plan,
+    mortgageConfiguration:
+      plan.mortgageConfiguration ?? defaultMortgageConfiguration,
+    propertyInformation:
+      plan.propertyInformation ?? defaultPropertyInformation,
+    taxSettings: {
+      ...taxSettings,
+      minimumCashReserve: taxSettings.minimumCashReserve ?? 10_000,
+      optimiseTaxAutomatically:
+        taxSettings.optimiseTaxAutomatically ?? true,
+      accumulationPriority:
+        taxSettings.accumulationPriority ?? defaultAccumulationPriority,
+      withdrawalPriority:
+        taxSettings.withdrawalPriority ??
+        plan.withdrawalOrder ??
+        defaultWithdrawalPriority,
+    },
+  };
+}
+
+export const storedRetirementPlanSchema = z.preprocess(
+  addStoredPlanDefaults,
+  retirementPlanSchema,
+);
 
 export const savedPlanSchema = z.object({
   version: z.literal(1),
   savedAt: z.string().datetime(),
-  plan: z.preprocess((value) => {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      return value;
-    }
-
-    const plan = value as Record<string, unknown>;
-    return {
-      ...plan,
-      mortgageConfiguration:
-        plan.mortgageConfiguration ?? defaultMortgageConfiguration,
-      propertyInformation:
-        plan.propertyInformation ?? defaultPropertyInformation,
-    };
-  }, retirementPlanSchema),
+  plan: storedRetirementPlanSchema,
 });

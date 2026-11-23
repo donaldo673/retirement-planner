@@ -2,7 +2,9 @@ export type HouseholdType = "single" | "joint";
 
 export type ScenarioType = "conservative" | "expected" | "optimistic";
 
-export type WithdrawalSource = "cash" | "gia" | "isa" | "pension";
+export type AccountType = "cash" | "gia" | "isa" | "pension";
+
+export type WithdrawalSource = AccountType;
 
 export type ProjectionStatus = "green" | "amber" | "red";
 
@@ -162,6 +164,10 @@ export interface Assumptions {
 
 export interface TaxSettings {
   jurisdiction: TaxJurisdiction;
+  minimumCashReserve: number;
+  optimiseTaxAutomatically: boolean;
+  accumulationPriority: AccountType[];
+  withdrawalPriority: AccountType[];
 }
 
 export interface Scenario {
@@ -179,7 +185,6 @@ export interface RetirementPlan {
   assumptions: Assumptions;
   taxSettings: TaxSettings;
   scenario: ScenarioType;
-  withdrawalOrder: WithdrawalSource[];
 }
 
 export interface ContributionBreakdown {
@@ -298,6 +303,7 @@ export interface TaxInputs {
   savingsInterest: number;
   dividendIncome: number;
   capitalGains: number;
+  pensionContributions?: number;
 }
 
 export interface TaxResult {

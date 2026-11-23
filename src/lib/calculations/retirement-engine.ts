@@ -1,6 +1,7 @@
 import type {
   Assumptions,
   AccountProjectionBreakdown,
+  AccountType,
   ContributionBreakdown,
   ProjectionResult,
   ProjectionYear,
@@ -23,6 +24,9 @@ const MONTHS_PER_YEAR = 12;
 const MONEY_EPSILON = 0.000001;
 const SMALL_ESTATE_THRESHOLD = 50_000;
 const FINANCIAL_INDEPENDENCE_MULTIPLE = 25;
+const ANNUAL_ISA_ALLOWANCE = 20_000;
+const ANNUAL_PENSION_ALLOWANCE = 60_000;
+const MINIMUM_PENSION_CONTRIBUTION_FOR_TAX_RELIEF = 3_600;
 
 const SCENARIO_RETURN_ADJUSTMENTS: Record<ScenarioType, number> = {
   conservative: -0.02,
@@ -79,7 +83,7 @@ function assertAge(label: string, value: number): void {
 }
 
 export function validateRetirementPlan(plan: RetirementPlan): void {
-  const { personalDetails, people, assets, spending, assumptions, withdrawalOrder } =
+  const { personalDetails, people, assets, spending, assumptions, taxSettings } =
     plan;
   const currentAge = people.person1.income.currentAge;
 
@@ -182,6 +186,10 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
   assertFiniteNonNegative("GIA cost basis", assets.gia.costBasis);
   assertFiniteNonNegative("GIA monthly contribution", assets.gia.monthlyContribution);
   assertFiniteNonNegative("Cash value", assets.cash.currentValue);
+  assertFiniteNonNegative(
+    "Minimum cash reserve",
+    taxSettings.minimumCashReserve,
+  );
   assertFiniteNonNegative("Other assets value", assets.otherAssets.currentValue);
   assertFiniteNonNegative("Mortgage balance", assets.mortgage.outstandingBalance);
   assertFiniteNonNegative("Mortgage monthly payment", assets.mortgage.monthlyPayment);
@@ -211,15 +219,20 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
     }
   }
 
-  const requiredSources: WithdrawalSource[] = ["cash", "gia", "isa", "pension"];
-  if (
-    withdrawalOrder.length !== requiredSources.length ||
-    new Set(withdrawalOrder).size !== requiredSources.length ||
-    requiredSources.some((source) => !withdrawalOrder.includes(source))
-  ) {
-    throw new RangeError(
-      "Withdrawal order must contain cash, GIA, ISA, and pension exactly once.",
-    );
+  const requiredAccounts: AccountType[] = ["cash", "gia", "isa", "pension"];
+  for (const [label, priority] of [
+    ["Accumulation priority", taxSettings.accumulationPriority],
+    ["Withdrawal priority", taxSettings.withdrawalPriority],
+  ] as const) {
+    if (
+      priority.length !== requiredAccounts.length ||
+      new Set(priority).size !== requiredAccounts.length ||
+      requiredAccounts.some((account) => !priority.includes(account))
+    ) {
+      throw new RangeError(
+        `${label} must contain cash, GIA, ISA, and pension exactly once.`,
+      );
+    }
   }
 }
 
@@ -360,7 +373,19 @@ function calculateMortgageYear(
 
   for (let month = 0; month < MONTHS_PER_YEAR && balance > MONEY_EPSILON; month += 1) {
     balance += balance * monthlyRate;
-    const monthlyPayment = Math.min(balance, mortgage.monthlyPayment);
+    if (month === 0) {
+      const lumpSumOverpayment = Math.min(
+        balance,
+        plan.mortgageConfiguration.annualLumpSumOverpayment,
+      );
+      balance -= lumpSumOverpayment;
+      payment += lumpSumOverpayment;
+    }
+    const monthlyPayment = Math.min(
+      balance,
+      mortgage.monthlyPayment +
+        plan.mortgageConfiguration.monthlyOverpayment,
+    );
     balance -= monthlyPayment;
     payment += monthlyPayment;
   }
@@ -621,99 +646,242 @@ function calculateInvestmentGrowth(
 function addContributions(
   balances: AccountBalances,
   plan: RetirementPlan,
+  taxYear: number,
   availableCashflow: number,
   annualIncome: Record<PersonKey, AnnualIncome>,
-): { balances: AccountBalances; contributions: ContributionBreakdown } {
+  investmentIncome: InvestmentIncome,
+): {
+  balances: AccountBalances;
+  contributions: ContributionBreakdown;
+  tax: TaxResult;
+  personTaxes: Record<PersonKey, TaxResult>;
+  cashNetContribution: number;
+} {
   const isWorking = {
     person1:
       annualIncome.person1.salary > 0 ||
       annualIncome.person1.secondSalary > 0,
     person2:
-      annualIncome.person2.salary > 0 ||
-      annualIncome.person2.secondSalary > 0,
+      plan.personalDetails.householdType === "joint" &&
+      (annualIncome.person2.salary > 0 ||
+        annualIncome.person2.secondSalary > 0),
   };
-  if ((!isWorking.person1 && !isWorking.person2) || availableCashflow <= 0) {
-    return { balances, contributions: createZeroContributions() };
+  const contributions = createZeroContributions();
+  const updatedBalances = cloneAccountBalances(balances);
+  const currentPensionContributions = () => ({
+    person1: contributions.byPerson.person1.pensionContribution,
+    person2: contributions.byPerson.person2.pensionContribution,
+  });
+  const calculateContributionTaxes = () =>
+    calculatePersonTaxes(
+      plan,
+      taxYear,
+      annualIncome,
+      investmentIncome,
+      createZeroWithdrawals(),
+      0,
+      currentPensionContributions(),
+    );
+  let remainingCashflow = Math.max(0, availableCashflow);
+  let personTaxes = calculateContributionTaxes();
+  let tax = combineTaxes(personTaxes);
+  if ((!isWorking.person1 && !isWorking.person2) || remainingCashflow <= 0) {
+    return {
+      balances: updatedBalances,
+      contributions,
+      tax,
+      personTaxes,
+      cashNetContribution: remainingCashflow,
+    };
   }
 
-  const scheduledByPerson = {
+  const scheduledByPerson: Record<
+    PersonKey,
+    { isa: number; pension: number }
+  > = {
     person1: {
-      isaContribution: isWorking.person1
+      isa: isWorking.person1
         ? plan.people.person1.assets.isa.monthlyContribution * MONTHS_PER_YEAR
         : 0,
-      pensionContribution: isWorking.person1
+      pension: isWorking.person1
         ? plan.people.person1.assets.pension.monthlyContribution * MONTHS_PER_YEAR
         : 0,
     },
     person2: {
-      isaContribution: isWorking.person2
+      isa: isWorking.person2
         ? plan.people.person2.assets.isa.monthlyContribution * MONTHS_PER_YEAR
         : 0,
-      pensionContribution: isWorking.person2
+      pension: isWorking.person2
         ? plan.people.person2.assets.pension.monthlyContribution * MONTHS_PER_YEAR
         : 0,
     },
   };
-  const giaContribution =
+  const scheduledGiaContribution =
     plan.assets.gia.monthlyContribution * MONTHS_PER_YEAR;
-  const scheduledTotal =
-    scheduledByPerson.person1.isaContribution +
-    scheduledByPerson.person1.pensionContribution +
-    scheduledByPerson.person2.isaContribution +
-    scheduledByPerson.person2.pensionContribution +
-    giaContribution;
-  if (scheduledTotal === 0) {
-    return { balances, contributions: createZeroContributions() };
-  }
+  const people: PersonKey[] =
+    plan.personalDetails.householdType === "joint"
+      ? ["person1", "person2"]
+      : ["person1"];
+  const reserveTopUp = Math.min(
+    remainingCashflow,
+    Math.max(0, plan.taxSettings.minimumCashReserve - updatedBalances.cash),
+  );
+  remainingCashflow -= reserveTopUp;
 
-  const scale = Math.min(1, availableCashflow / scheduledTotal);
-  const contributions: ContributionBreakdown = {
-    isaContribution:
-      (scheduledByPerson.person1.isaContribution +
-        scheduledByPerson.person2.isaContribution) *
-      scale,
-    pensionContribution:
-      (scheduledByPerson.person1.pensionContribution +
-        scheduledByPerson.person2.pensionContribution) *
-      scale,
-    giaContribution: giaContribution * scale,
-    byPerson: {
-      person1: {
-        isaContribution: scheduledByPerson.person1.isaContribution * scale,
-        pensionContribution:
-          scheduledByPerson.person1.pensionContribution * scale,
-      },
-      person2: {
-        isaContribution: scheduledByPerson.person2.isaContribution * scale,
-        pensionContribution:
-          scheduledByPerson.person2.pensionContribution * scale,
-      },
-    },
+  const addContribution = (
+    account: Exclude<AccountType, "cash">,
+    personKey: PersonKey | null,
+    requestedAmount: number,
+  ): number => {
+    if (requestedAmount <= MONEY_EPSILON || remainingCashflow <= MONEY_EPSILON) {
+      return 0;
+    }
+
+    let maximumAmount = requestedAmount;
+    if (account === "isa" && personKey !== null) {
+      maximumAmount = Math.min(
+        maximumAmount,
+        Math.max(
+          0,
+          ANNUAL_ISA_ALLOWANCE -
+            contributions.byPerson[personKey].isaContribution,
+        ),
+      );
+    } else if (account === "pension" && personKey !== null) {
+      const relevantEarnings =
+        annualIncome[personKey].salary + annualIncome[personKey].secondSalary;
+      const pensionLimit = Math.min(
+        ANNUAL_PENSION_ALLOWANCE,
+        relevantEarnings > 0
+          ? relevantEarnings
+          : MINIMUM_PENSION_CONTRIBUTION_FOR_TAX_RELIEF,
+      );
+      maximumAmount = Math.min(
+        maximumAmount,
+        Math.max(
+          0,
+          pensionLimit -
+            contributions.byPerson[personKey].pensionContribution,
+        ),
+      );
+    }
+    if (maximumAmount <= MONEY_EPSILON) {
+      return 0;
+    }
+
+    const taxCost = (amount: number): number => {
+      if (account !== "pension" || personKey === null) {
+        return amount;
+      }
+
+      contributions.byPerson[personKey].pensionContribution += amount;
+      const taxAfterContribution = combineTaxes(calculateContributionTaxes());
+      contributions.byPerson[personKey].pensionContribution -= amount;
+      const taxRelief = Math.max(0, tax.totalTax - taxAfterContribution.totalTax);
+      return amount - taxRelief;
+    };
+
+    let amount = maximumAmount;
+    if (taxCost(amount) > remainingCashflow) {
+      let low = 0;
+      let high = amount;
+      for (let iteration = 0; iteration < 48; iteration += 1) {
+        const midpoint = (low + high) / 2;
+        if (taxCost(midpoint) <= remainingCashflow) {
+          low = midpoint;
+        } else {
+          high = midpoint;
+        }
+      }
+      amount = low;
+    }
+    if (amount <= MONEY_EPSILON) {
+      return 0;
+    }
+
+    const previousTax = tax;
+    if (account === "isa" && personKey !== null) {
+      contributions.byPerson[personKey].isaContribution += amount;
+      updatedBalances.isa[personKey] += amount;
+      contributions.isaContribution += amount;
+    } else if (account === "pension" && personKey !== null) {
+      contributions.byPerson[personKey].pensionContribution += amount;
+      updatedBalances.pension[personKey] += amount;
+      contributions.pensionContribution += amount;
+    } else if (account === "gia") {
+      contributions.giaContribution += amount;
+      updatedBalances.gia += amount;
+      updatedBalances.giaCostBasis += amount;
+    }
+    personTaxes = calculateContributionTaxes();
+    tax = combineTaxes(personTaxes);
+    remainingCashflow = Math.max(
+      0,
+      remainingCashflow -
+        amount +
+        Math.max(0, previousTax.totalTax - tax.totalTax),
+    );
+    return amount;
   };
 
+  const scheduledAmount = (
+    account: "isa" | "pension",
+    personKey: PersonKey,
+  ) => scheduledByPerson[personKey][account];
+  for (const account of plan.taxSettings.accumulationPriority) {
+    if (account === "cash") {
+      continue;
+    }
+    if (account === "gia") {
+      addContribution("gia", null, scheduledGiaContribution);
+      continue;
+    }
+    for (const personKey of people) {
+      addContribution(
+        account,
+        personKey,
+        scheduledAmount(account, personKey),
+      );
+    }
+  }
+
+  if (plan.taxSettings.optimiseTaxAutomatically) {
+    for (const account of plan.taxSettings.accumulationPriority) {
+      if (remainingCashflow <= MONEY_EPSILON || account === "cash") {
+        break;
+      }
+      if (account === "gia") {
+        addContribution("gia", null, remainingCashflow);
+        continue;
+      }
+      if (account === "isa") {
+        for (const personKey of people) {
+          addContribution("isa", personKey, remainingCashflow);
+        }
+        continue;
+      }
+      const pensionCandidates = [...people].sort((first, second) => {
+        const taxSavingFor = (personKey: PersonKey) => {
+          const currentTax = tax.totalTax;
+          contributions.byPerson[personKey].pensionContribution += 1;
+          const increasedTax = combineTaxes(calculateContributionTaxes()).totalTax;
+          contributions.byPerson[personKey].pensionContribution -= 1;
+          return currentTax - increasedTax;
+        };
+        return taxSavingFor(second) - taxSavingFor(first);
+      });
+      for (const personKey of pensionCandidates) {
+        addContribution("pension", personKey, remainingCashflow);
+      }
+    }
+  }
+
   return {
-    balances: {
-      isa: {
-        person1:
-          balances.isa.person1 +
-          contributions.byPerson.person1.isaContribution,
-        person2:
-          balances.isa.person2 +
-          contributions.byPerson.person2.isaContribution,
-      },
-      pension: {
-        person1:
-          balances.pension.person1 +
-          contributions.byPerson.person1.pensionContribution,
-        person2:
-          balances.pension.person2 +
-          contributions.byPerson.person2.pensionContribution,
-      },
-      gia: balances.gia + contributions.giaContribution,
-      giaCostBasis: balances.giaCostBasis + contributions.giaContribution,
-      cash: balances.cash,
-    },
+    balances: updatedBalances,
     contributions,
+    tax,
+    personTaxes,
+    cashNetContribution: reserveTopUp + remainingCashflow,
   };
 }
 
@@ -722,6 +890,7 @@ function withdrawFromSource(
   requestedAmount: number,
   balances: AccountBalances,
   withdrawals: WithdrawalBreakdown,
+  minimumCashReserve: number,
 ): { remaining: number; realizedCapitalGain: number } {
   if (source === "isa" || source === "pension") {
     const account = balances[source];
@@ -745,7 +914,10 @@ function withdrawFromSource(
     };
   }
 
-  const available = source === "cash" ? balances.cash : balances.gia;
+  const available =
+    source === "cash"
+      ? Math.max(0, balances.cash - minimumCashReserve)
+      : balances.gia;
   const amount = Math.min(available, requestedAmount);
   if (source === "cash") {
     balances.cash = Math.max(0, balances.cash - amount);
@@ -778,6 +950,7 @@ function createTaxInputs(
   investmentIncome: InvestmentIncome,
   withdrawals: WithdrawalBreakdown,
   realizedCapitalGains: number,
+  pensionContributions: Record<PersonKey, number>,
 ): TaxInputs {
   const personIncome = annualIncome[personKey];
   const taxableInvestments = personKey === "person1";
@@ -799,6 +972,7 @@ function createTaxInputs(
       ? Math.max(0, investmentIncome.dividends)
       : 0,
     capitalGains: taxableInvestments ? realizedCapitalGains : 0,
+    pensionContributions: pensionContributions[personKey],
   };
 }
 
@@ -809,6 +983,10 @@ function calculatePersonTaxes(
   investmentIncome: InvestmentIncome,
   withdrawals: WithdrawalBreakdown,
   realizedCapitalGains: number,
+  pensionContributions: Record<PersonKey, number> = {
+    person1: 0,
+    person2: 0,
+  },
 ): Record<PersonKey, TaxResult> {
   const person1 = calculateUkTax(
     createTaxInputs(
@@ -819,6 +997,7 @@ function calculatePersonTaxes(
       investmentIncome,
       withdrawals,
       realizedCapitalGains,
+      pensionContributions,
     ),
   );
   const person2 =
@@ -832,6 +1011,7 @@ function calculatePersonTaxes(
             investmentIncome,
             withdrawals,
             realizedCapitalGains,
+            pensionContributions,
           ),
         )
       : createZeroTaxResult();
@@ -868,6 +1048,25 @@ function cloneAccountBalances(balances: AccountBalances): AccountBalances {
   };
 }
 
+function getWithdrawalOrders(priority: AccountType[]): AccountType[][] {
+  const orders: AccountType[][] = [];
+  const permute = (remaining: AccountType[], current: AccountType[]) => {
+    if (remaining.length === 0) {
+      orders.push(current);
+      return;
+    }
+
+    for (let index = 0; index < remaining.length; index += 1) {
+      permute(
+        remaining.filter((_, remainingIndex) => remainingIndex !== index),
+        [...current, remaining[index]],
+      );
+    }
+  };
+  permute(priority, []);
+  return orders;
+}
+
 interface WithdrawalEvaluation {
   balances: AccountBalances;
   withdrawals: WithdrawalBreakdown;
@@ -898,6 +1097,7 @@ function evaluateWithdrawals(
       remaining,
       balances,
       withdrawals,
+      plan.taxSettings.minimumCashReserve,
     );
     remaining = result.remaining;
     realizedCapitalGains += result.realizedCapitalGain;
@@ -1034,65 +1234,118 @@ function simulateYear(
     const contributionResult = addContributions(
       balancesAfterGrowth,
       plan,
+      taxYear,
       netCashflowBeforeWithdrawals,
       annualIncome,
+      growthResult.income,
     );
     balances = contributionResult.balances;
     contributionBreakdown = contributionResult.contributions;
-    const totalContributions =
-      contributionBreakdown.isaContribution +
-      contributionBreakdown.pensionContribution +
-      contributionBreakdown.giaContribution;
-    cashNetContribution = netCashflowBeforeWithdrawals - totalContributions;
+    personTaxes = contributionResult.personTaxes;
+    tax = contributionResult.tax;
+    cashNetContribution = contributionResult.cashNetContribution;
     balances.cash += cashNetContribution;
   } else if (netCashflowBeforeWithdrawals < 0) {
     const availableAssets =
-      balancesAfterGrowth.cash +
+      Math.max(
+        0,
+        balancesAfterGrowth.cash - plan.taxSettings.minimumCashReserve,
+      ) +
       balancesAfterGrowth.gia +
       sumPersonValues(balancesAfterGrowth.isa) +
       sumPersonValues(balancesAfterGrowth.pension);
     const requiredNetFunds = spendingAndMortgage;
-    let high = availableAssets;
-    const highEvaluation = evaluateWithdrawals(
-      plan,
-      taxYear,
-      annualIncome,
-      growthResult.income,
-      balancesAfterGrowth,
-      plan.withdrawalOrder,
-      high,
-    );
+    const orders = plan.taxSettings.optimiseTaxAutomatically
+      ? getWithdrawalOrders(plan.taxSettings.withdrawalPriority)
+      : [plan.taxSettings.withdrawalPriority];
+    let bestEvaluation: WithdrawalEvaluation | null = null;
+    let bestWithdrawalAmount = Number.POSITIVE_INFINITY;
 
-    if (highEvaluation.netFunds >= requiredNetFunds) {
-      let low = 0;
-      for (let iteration = 0; iteration < 64; iteration += 1) {
-        const midpoint = (low + high) / 2;
-        const evaluation = evaluateWithdrawals(
+    for (const order of orders) {
+      let high = availableAssets;
+      let evaluation = evaluateWithdrawals(
+        plan,
+        taxYear,
+        annualIncome,
+        growthResult.income,
+        balancesAfterGrowth,
+        order,
+        high,
+      );
+
+      if (evaluation.netFunds >= requiredNetFunds) {
+        let low = 0;
+        for (let iteration = 0; iteration < 48; iteration += 1) {
+          const midpoint = (low + high) / 2;
+          const midpointEvaluation = evaluateWithdrawals(
+            plan,
+            taxYear,
+            annualIncome,
+            growthResult.income,
+            balancesAfterGrowth,
+            order,
+            midpoint,
+          );
+          if (midpointEvaluation.netFunds >= requiredNetFunds) {
+            high = midpoint;
+            evaluation = midpointEvaluation;
+          } else {
+            low = midpoint;
+          }
+        }
+        high = Math.round(high * 100) / 100;
+        evaluation = evaluateWithdrawals(
           plan,
           taxYear,
           annualIncome,
           growthResult.income,
           balancesAfterGrowth,
-          plan.withdrawalOrder,
-          midpoint,
+          order,
+          high,
         );
-        if (evaluation.netFunds >= requiredNetFunds) {
-          high = midpoint;
-        } else {
-          low = midpoint;
+        if (evaluation.netFunds < requiredNetFunds - MONEY_EPSILON) {
+          high += 0.01;
+          evaluation = evaluateWithdrawals(
+            plan,
+            taxYear,
+            annualIncome,
+            growthResult.income,
+            balancesAfterGrowth,
+            order,
+            high,
+          );
         }
+      }
+
+      const candidateMeetsNeed =
+        evaluation.netFunds >= requiredNetFunds - MONEY_EPSILON;
+      const bestMeetsNeed =
+        bestEvaluation !== null &&
+        bestEvaluation.netFunds >= requiredNetFunds - MONEY_EPSILON;
+      const isBetter =
+        bestEvaluation === null ||
+        (candidateMeetsNeed && !bestMeetsNeed) ||
+        (candidateMeetsNeed &&
+          bestMeetsNeed &&
+          (high < bestWithdrawalAmount - MONEY_EPSILON ||
+            (Math.abs(high - bestWithdrawalAmount) <= MONEY_EPSILON &&
+              evaluation.tax.totalTax < bestEvaluation.tax.totalTax))) ||
+        (!candidateMeetsNeed &&
+          !bestMeetsNeed &&
+          (evaluation.netFunds > bestEvaluation.netFunds + MONEY_EPSILON ||
+            (Math.abs(evaluation.netFunds - bestEvaluation.netFunds) <=
+              MONEY_EPSILON &&
+              evaluation.tax.totalTax < bestEvaluation.tax.totalTax)));
+      if (isBetter) {
+        bestEvaluation = evaluation;
+        bestWithdrawalAmount = high;
       }
     }
 
-    const evaluation = evaluateWithdrawals(
-      plan,
-      taxYear,
-      annualIncome,
-      growthResult.income,
-      balancesAfterGrowth,
-      plan.withdrawalOrder,
-      high,
-    );
+    if (!bestEvaluation) {
+      throw new Error("Withdrawal optimisation did not evaluate any account order.");
+    }
+    const evaluation = bestEvaluation;
     balances = evaluation.balances;
     withdrawals = evaluation.withdrawals;
     realizedCapitalGains = evaluation.realizedCapitalGains;
