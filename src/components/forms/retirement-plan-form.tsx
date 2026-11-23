@@ -34,12 +34,12 @@ function FormSection({
   children,
 }: SectionProps) {
   return (
-    <section
-      aria-labelledby={`${id}-heading`}
-      className="scroll-mt-24 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow duration-200 hover:shadow-md sm:p-7 dark:border-slate-800 dark:bg-slate-900"
+    <details
+      className="scroll-mt-24 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-7 dark:border-slate-800 dark:bg-slate-900"
       id={id}
+      open={id === "personal"}
     >
-      <div className="mb-6 flex items-start gap-3">
+      <summary className="mb-5 flex cursor-pointer items-start gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-600">
         <span
           aria-hidden="true"
           className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-teal-50 text-xs font-semibold text-teal-800 dark:bg-teal-950 dark:text-teal-200"
@@ -55,9 +55,9 @@ function FormSection({
           </h2>
           <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p>
         </div>
-      </div>
-      {children}
-    </section>
+      </summary>
+      <div>{children}</div>
+    </details>
   );
 }
 
@@ -173,10 +173,12 @@ export function RetirementPlanForm({
   personTaxes,
   projection,
   projectionYear,
+  onViewResults,
 }: {
   personTaxes?: Record<PersonKey, TaxResult>;
   projection?: ProjectionResult | null;
   projectionYear?: ProjectionYear;
+  onViewResults: () => void;
 }) {
   const {
     control,
@@ -233,10 +235,10 @@ export function RetirementPlanForm({
   return (
     <div className="space-y-5">
       <FormSection
-        description="Set the ages that define your planning timeline."
+        description="Set your household details and the ages that define your planning timeline."
         id="personal"
         number="01"
-        title="Personal details"
+        title="About you"
       >
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <NumberField
@@ -273,6 +275,18 @@ export function RetirementPlanForm({
               <option value="joint">Joint</option>
             </select>
           </div>
+          {availablePeople.map((personKey, index) => (
+            <NumberField
+              error={errors.people?.[personKey]?.income?.currentAge?.message}
+              key={personKey}
+              label={index === 0 ? "Your current age" : "Partner current age"}
+              max={120}
+              min={0}
+              name={`people.${personKey}.income.currentAge`}
+              step={1}
+              suffix="years"
+            />
+          ))}
         </div>
       </FormSection>
 
@@ -463,15 +477,6 @@ export function RetirementPlanForm({
                 Planning ages
               </h3>
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <NumberField
-                  error={personIncomeErrors?.currentAge?.message}
-                  label="Current age"
-                  max={120}
-                  min={0}
-                  name={`people.${activePerson}.income.currentAge`}
-                  step={1}
-                  suffix="years"
-                />
                 <NumberField
                   error={personIncomeErrors?.statePensionAge?.message}
                   label="State Pension age"
@@ -734,10 +739,10 @@ export function RetirementPlanForm({
       </FormSection>
 
       <FormSection
-        description="Tax jurisdiction and real yields affect annual tax and investment growth."
+        description="Set the tax jurisdiction, investment growth, inflation, and other assumptions used by the projection."
         id="assumptions"
         number="05"
-        title="Tax and investment assumptions"
+        title="Planning assumptions"
       >
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <div>
@@ -794,55 +799,68 @@ export function RetirementPlanForm({
             min={-100}
           />
         </div>
-      </FormSection>
 
-      <FormSection
-        description="Choose which accounts are drawn from first when income does not cover spending."
-        id="withdrawals"
-        number="06"
-        title="Withdrawal order"
-      >
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {withdrawalSources.map((_, index) => {
-            const fieldName = `withdrawalOrder.${index}` as const;
-            const error = errors.withdrawalOrder?.[index]?.message;
+        <details className="mt-6 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+          <summary className="min-h-8 cursor-pointer text-sm font-semibold text-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 dark:text-slate-100">
+            Advanced: withdrawal order
+          </summary>
+          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+            Choose the account order modelled when income does not cover spending.
+          </p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {withdrawalSources.map((_, index) => {
+              const fieldName = `withdrawalOrder.${index}` as const;
+              const error = errors.withdrawalOrder?.[index]?.message;
 
-            return (
-              <div key={fieldName}>
-                <label
-                  className="form-label"
-                  htmlFor={`withdrawal-order-${index}`}
-                >
-                  {index + 1}
-                  {index === 0 ? "st" : index === 1 ? "nd" : index === 2 ? "rd" : "th"} source
-                </label>
-                <select
-                  aria-describedby={error ? `withdrawal-order-${index}-error` : undefined}
-                  aria-invalid={Boolean(error)}
-                  className="form-control"
-                  id={`withdrawal-order-${index}`}
-                  {...register(fieldName)}
-                >
-                  {withdrawalSources.map((source) => (
-                    <option key={source.value} value={source.value}>
-                      {source.label}
-                    </option>
-                  ))}
-                </select>
-                {error ? (
-                  <p
-                    className="mt-1.5 text-xs font-medium text-rose-600"
-                    id={`withdrawal-order-${index}-error`}
-                    role="alert"
+              return (
+                <div key={fieldName}>
+                  <label
+                    className="form-label"
+                    htmlFor={`withdrawal-order-${index}`}
                   >
-                    {error}
-                  </p>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
+                    {index + 1}
+                    {index === 0 ? "st" : index === 1 ? "nd" : index === 2 ? "rd" : "th"} source
+                  </label>
+                  <select
+                    aria-describedby={error ? `withdrawal-order-${index}-error` : undefined}
+                    aria-invalid={Boolean(error)}
+                    className="form-control"
+                    id={`withdrawal-order-${index}`}
+                    {...register(fieldName)}
+                  >
+                    {withdrawalSources.map((source) => (
+                      <option key={source.value} value={source.value}>
+                        {source.label}
+                      </option>
+                    ))}
+                  </select>
+                  {error ? (
+                    <p
+                      className="mt-1.5 text-xs font-medium text-rose-600"
+                      id={`withdrawal-order-${index}-error`}
+                      role="alert"
+                    >
+                      {error}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </details>
       </FormSection>
+      <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
+        <button
+          className="min-h-12 rounded-xl bg-slate-900 px-6 text-sm font-semibold text-white transition hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 dark:bg-teal-400 dark:text-slate-950 dark:hover:bg-teal-300"
+          onClick={onViewResults}
+          type="button"
+        >
+          View My Results
+        </button>
+        <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+          Valid inputs save automatically in this browser.
+        </p>
+      </div>
     </div>
   );
 }

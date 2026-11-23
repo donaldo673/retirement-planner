@@ -19,6 +19,8 @@ interface ChartDashboardProps {
   retirementAge: number;
   lifeExpectancy: number;
   scenarioSeries?: ScenarioChartSeries[];
+  mode: "overview" | "explore";
+  exploreTab: "wealth" | "income" | "tax" | "independence" | "risks";
 }
 
 export function ChartDashboard({
@@ -28,6 +30,8 @@ export function ChartDashboard({
   retirementAge,
   lifeExpectancy,
   scenarioSeries = [],
+  mode,
+  exploreTab,
 }: ChartDashboardProps) {
   const netWorthData = useMemo(
     () => transformNetWorthData(yearlyResults),
@@ -45,42 +49,63 @@ export function ChartDashboard({
     () => transformTaxData(yearlyResults),
     [yearlyResults],
   );
+  const showNetWorth =
+    mode === "overview" || (mode === "explore" && exploreTab === "wealth");
+  const showAssets = mode === "explore" && exploreTab === "wealth";
+  const showCashflow = mode === "explore" && exploreTab === "income";
+  const showTax = mode === "explore" && exploreTab === "tax";
+  const chartHeadingId = `projection-charts-heading-${mode}`;
+
+  if (!showNetWorth && !showAssets && !showCashflow && !showTax) {
+    return null;
+  }
 
   return (
     <section
-      aria-labelledby="projection-charts-heading"
+      aria-labelledby={chartHeadingId}
       className="mt-8 scroll-mt-24"
-      id="projection-charts"
+      id={`projection-charts-${mode}`}
     >
       <div className="mb-4">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700 dark:text-teal-300">
-          Explore your projection
+          {mode === "overview" ? "Projection overview" : "Explore your projection"}
         </p>
         <h2
           className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white"
-          id="projection-charts-heading"
+          id={chartHeadingId}
         >
-          Your plan, visualised
+          {mode === "overview"
+            ? "Projected net worth"
+            : exploreTab === "wealth"
+              ? "Wealth"
+              : exploreTab === "income"
+                ? "Income and spending"
+                : "Tax estimates"}
         </h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-          See how your projected wealth, account balances, retirement cashflow
-          and taxes may change over time.
+          {mode === "overview"
+            ? "Projected net worth over time, with key planning ages marked."
+            : exploreTab === "wealth"
+              ? "Explore projected net worth and how the main asset groups change over time."
+              : exploreTab === "income"
+                ? "Review projected income, spending, and annual cashflow."
+                : "Tax outputs are estimates based on the rules and assumptions implemented in the model."}
         </p>
       </div>
       <div className="grid min-w-0 gap-4">
-        <NetWorthChart
-          currentAge={currentAge}
-          data={netWorthData}
-          financialIndependenceAge={summary.financialIndependenceAge}
-          lifeExpectancy={lifeExpectancy}
-          retirementAge={retirementAge}
-          scenarioSeries={scenarioSeries}
-        />
-        <AssetBreakdownChart data={assetAllocationData} />
-        <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-          <CashflowChart data={cashflowData} />
-          <TaxAnalysisChart data={taxData} />
-        </div>
+        {showNetWorth && (
+          <NetWorthChart
+            currentAge={currentAge}
+            data={netWorthData}
+            financialIndependenceAge={summary.financialIndependenceAge}
+            lifeExpectancy={lifeExpectancy}
+            retirementAge={retirementAge}
+            scenarioSeries={scenarioSeries}
+          />
+        )}
+        {showAssets && <AssetBreakdownChart data={assetAllocationData} />}
+        {showCashflow && <CashflowChart data={cashflowData} />}
+        {showTax && <TaxAnalysisChart data={taxData} />}
       </div>
     </section>
   );

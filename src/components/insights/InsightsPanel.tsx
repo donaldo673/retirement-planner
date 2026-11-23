@@ -12,13 +12,13 @@ const groups: {
 }[] = [
   {
     category: "warning",
-    title: "Consider reviewing",
-    description: "Potential pressure points to explore.",
+    title: "Projected pressure points",
+    description: "Outputs that may change when assumptions change.",
   },
   {
     category: "success",
-    title: "Strengths",
-    description: "What is working well in this projection.",
+    title: "Projection observations",
+    description: "Numerical outcomes in the current projection.",
   },
   {
     category: "information",
@@ -36,17 +36,17 @@ export function InsightsPanel({ insights }: InsightsPanelProps) {
     >
       <div className="mb-4">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700 dark:text-teal-300">
-          Your plan at a glance
+          Calculation-based observations
         </p>
         <h2
           className="mt-1 text-xl font-semibold tracking-tight text-slate-950 dark:text-white"
           id="planning-insights-heading"
         >
-          Planning insights
+          Key observations from your projection
         </h2>
         <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          Observations are generated from your current inputs and projection.
-          Select “Why am I seeing this?” for the calculation and source.
+          These factual outputs are generated from your current inputs and projection.
+          Expand an item to see its calculation and source.
         </p>
       </div>
       <div className="space-y-5">

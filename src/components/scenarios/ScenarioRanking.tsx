@@ -21,10 +21,10 @@ const weightLabels: {
   key: keyof ScenarioRankingWeights;
   label: string;
 }[] = [
-  { key: "readiness", label: "Readiness" },
-  { key: "sustainability", label: "Sustainability" },
-  { key: "taxEfficiency", label: "Tax efficiency" },
-  { key: "flexibility", label: "Retirement flexibility" },
+  { key: "readiness", label: "Readiness calculation" },
+  { key: "sustainability", label: "Funding duration calculation" },
+  { key: "taxEfficiency", label: "Tax calculation" },
+  { key: "flexibility", label: "Retirement age calculation" },
 ];
 
 function getHealthScore(scenario: Scenario, id: string): number {
@@ -88,12 +88,11 @@ export function ScenarioRanking({ scenarios }: ScenarioRankingProps) {
           className="text-lg font-semibold text-slate-950 dark:text-white"
           id="scenario-ranking-heading"
         >
-          Scenario ranking
+          Weighted scenario comparison
         </h2>
         <p className="mt-1 text-sm leading-5 text-slate-600 dark:text-slate-400">
-          Adjust the weights applied to the existing readiness and health
-          assessments. These measures are educational indicators, not a
-          recommendation or probability of success.
+          Adjust the weights applied to existing mathematical outputs. The
+          resulting order is not a recommendation or probability of success.
         </p>
       </div>
 
@@ -139,7 +138,9 @@ export function ScenarioRanking({ scenarios }: ScenarioRankingProps) {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-teal-800 dark:text-teal-300">
-                    {index === 0 ? "🥇 Best Overall" : `Rank ${index + 1}`}
+                    {index === 0
+                      ? "Highest weighted score"
+                      : `Weighted position ${index + 1}`}
                   </p>
                   <h3 className="mt-1 truncate text-sm font-semibold text-slate-950 dark:text-white">
                     {scenario.name}
@@ -152,7 +153,7 @@ export function ScenarioRanking({ scenarios }: ScenarioRankingProps) {
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {scenario.id === bestConservative && (
                   <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-800 dark:bg-blue-950 dark:text-blue-300">
-                    Conservative option
+                    Lower-return assumption
                   </span>
                 )}
                 {scenario.id === highestEstateId && (

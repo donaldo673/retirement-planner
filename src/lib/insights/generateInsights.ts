@@ -199,7 +199,7 @@ function createMetrics(facts: PlanningFacts): PlanningMetric[] {
       label: "Retirement years funded",
       value: fundedYears,
       explanation:
-        "Estimated years from the planned retirement age to the first projected shortfall, capped at your planning horizon.",
+        "Projected years from the planned retirement age to the first funding shortfall, capped at your planning horizon.",
     },
     {
       id: "average-withdrawal-rate",
@@ -217,14 +217,14 @@ function createMetrics(facts: PlanningFacts): PlanningMetric[] {
     },
     {
       id: "projected-estate-multiple",
-      label: "Projected estate multiple",
+      label: "Final net worth / projected spending",
       value: estateMultiple,
       explanation:
-        "Projected final estate divided by the model's total projected retirement spending.",
+        "Projected net worth at the end of the planning period divided by the model's total projected retirement spending.",
     },
     {
       id: "retirement-income",
-      label: "Projected income at retirement",
+      label: "Projected total income before tax at retirement",
       value: facts.retirementYear
         ? facts.retirementYear.totalIncome.toLocaleString("en-GB", {
             style: "currency",

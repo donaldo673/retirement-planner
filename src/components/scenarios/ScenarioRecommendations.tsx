@@ -4,15 +4,6 @@ interface ScenarioRecommendationsProps {
   recommendations: ScenarioRecommendation[];
 }
 
-const toneStyles = {
-  positive:
-    "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900 dark:bg-emerald-950/20",
-  balanced:
-    "border-blue-200 bg-blue-50/70 dark:border-blue-900 dark:bg-blue-950/20",
-  caution:
-    "border-amber-200 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20",
-};
-
 export function ScenarioRecommendations({
   recommendations,
 }: ScenarioRecommendationsProps) {
@@ -27,7 +18,7 @@ export function ScenarioRecommendations({
           className="text-lg font-semibold text-slate-950 dark:text-white"
           id="scenario-recommendations-heading"
         >
-          Balanced observations
+          Scenario observations
         </h2>
         <p className="mt-1 text-sm leading-5 text-slate-600 dark:text-slate-400">
           These comparisons describe trade-offs in the modeled results; they do
@@ -38,7 +29,7 @@ export function ScenarioRecommendations({
         <ul className="grid gap-3 lg:grid-cols-2">
           {recommendations.map((recommendation) => (
             <li
-              className={`rounded-2xl border p-4 ${toneStyles[recommendation.tone]}`}
+              className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
               key={recommendation.id}
             >
               <h3 className="text-sm font-semibold text-slate-950 dark:text-white">

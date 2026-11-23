@@ -36,7 +36,7 @@ const metrics: MetricDefinition[] = [
   {
     id: "retirement-age",
     label: "Retirement age",
-    badge: "🎯 Earliest retirement",
+    badge: "Lowest age",
     direction: "lower",
     value: (scenario) => scenario.inputs.plan.personalDetails.retirementAge,
     display: (scenario) =>
@@ -65,8 +65,8 @@ const metrics: MetricDefinition[] = [
   },
   {
     id: "estate",
-    label: "Final estate",
-    badge: "🏆 Highest estate",
+    label: "Projected final assets",
+    badge: "Highest value",
     direction: "higher",
     value: (scenario) =>
       scenario.results.projection.summary.finalEstateValue,
@@ -88,8 +88,8 @@ const metrics: MetricDefinition[] = [
   },
   {
     id: "lifetime-tax",
-    label: "Lifetime tax",
-    badge: "💰 Lowest tax",
+    label: "Estimated lifetime tax",
+    badge: "Lowest estimate",
     direction: "lower",
     value: (scenario) => scenario.results.lifetimeTax,
     display: (scenario) =>
@@ -119,15 +119,6 @@ const metrics: MetricDefinition[] = [
       scenario.results.projection.summary.ageAssetsRunOut === null
         ? "No shortfall"
         : `Age ${scenario.results.projection.summary.ageAssetsRunOut}`,
-  },
-  {
-    id: "readiness",
-    label: "Readiness score",
-    badge: "⭐ Best readiness",
-    direction: "higher",
-    value: (scenario) => scenario.results.analysis.readiness.score,
-    display: (scenario) =>
-      `${scenario.results.analysis.readiness.score} / 100`,
   },
 ];
 
@@ -171,10 +162,6 @@ export function ScenarioComparison({
   const selectedScenario = scenarios.find(
     (scenario) => scenario.id === selectedScenarioId,
   );
-  const currentScenario = scenarios.find(
-    (scenario) => scenario.id === comparison.currentScenarioId,
-  );
-
   return (
     <section
       aria-labelledby="scenario-comparison-heading"
@@ -192,8 +179,8 @@ export function ScenarioComparison({
           Compare scenarios
         </h2>
         <p className="mt-1 text-sm leading-5 text-slate-600 dark:text-slate-400">
-          Highlights identify the best value for each metric; they do not
-          identify a universally best plan.
+          Highlights identify the numerical extreme for each measure among the
+          selected scenarios. They do not determine which scenario is suitable.
         </p>
       </div>
 
@@ -281,11 +268,6 @@ export function ScenarioComparison({
               </article>
             ))}
           </div>
-          {currentScenario && (
-            <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
-              {currentScenario.results.analysis.readiness.explanation}
-            </p>
-          )}
         </div>
       )}
     </section>

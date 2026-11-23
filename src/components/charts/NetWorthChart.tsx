@@ -349,6 +349,9 @@ export function NetWorthChart({
         retirement, and life expectancy when they are within the selected range.
       </p>
       <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+        Horizontal axis: age · Vertical axis: projected net worth in GBP
+      </p>
+      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
         Inflation-adjusted values are not available yet.
       </p>
     </ChartCard>
