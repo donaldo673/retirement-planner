@@ -179,8 +179,13 @@ export function createSampleRetirementPlan(): RetirementPlan {
       cashInterestRealYield: -0.005,
       inflationRate: 0.025,
     },
-    taxSettings: { jurisdiction: "england" },
+    taxSettings: {
+      jurisdiction: "england",
+      minimumCashReserve: 10_000,
+      optimiseTaxAutomatically: true,
+      accumulationPriority: ["pension", "isa", "gia", "cash"],
+      withdrawalPriority: ["cash", "gia", "isa", "pension"],
+    },
     scenario: "expected",
-    withdrawalOrder: ["cash", "gia", "isa", "pension"],
   };
 }

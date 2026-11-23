@@ -236,7 +236,15 @@ export function ScenarioWorkspace({
         selected={selectedScenario}
       />
       <ScenarioRecommendations recommendations={recommendations} />
-      <ScenarioRanking scenarios={scenarios} />
+      <details className="mt-8 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <summary className="min-h-8 cursor-pointer font-semibold text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 dark:text-slate-100">
+          Advanced Comparison
+        </summary>
+        <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+          Weighted outputs reflect the mathematical criteria and weights shown. They do not determine which scenario is suitable or recommend a course of action.
+        </p>
+        <ScenarioRanking scenarios={scenarios} />
+      </details>
     </div>
   );
 

@@ -204,12 +204,15 @@ function calculateIncomeTax(
   rules: TaxRules,
   totalIncome: number,
 ): number {
-  const nonSavingsIncome =
+  const nonSavingsIncome = Math.max(
+    0,
     inputs.employmentIncomes.reduce((total, income) => total + income, 0) +
-    inputs.rentalProfit +
-    inputs.otherTaxableIncome +
-    inputs.pensionIncome +
-    inputs.statePensionIncome;
+      inputs.rentalProfit +
+      inputs.otherTaxableIncome +
+      inputs.pensionIncome +
+      inputs.statePensionIncome -
+      (inputs.pensionContributions ?? 0),
+  );
   const personalAllowance = getPersonalAllowance(totalIncome, rules);
   const bands = getIncomeTaxBands(
     inputs.jurisdiction,
@@ -335,6 +338,11 @@ export function calculateUkTax(inputs: TaxInputs): TaxResult {
       throw new RangeError("Taxable income inputs cannot be negative.");
     }
   }
+  const pensionContributions = inputs.pensionContributions ?? 0;
+  assertFinite("Pension contributions", pensionContributions);
+  if (pensionContributions < 0) {
+    throw new RangeError("Pension contributions cannot be negative.");
+  }
   assertFinite("Capital gains", inputs.capitalGains);
   if (
     !Number.isInteger(inputs.age) ||
@@ -348,15 +356,19 @@ export function calculateUkTax(inputs: TaxInputs): TaxResult {
   const rules = getRules(inputs.taxYear, inputs.inflationRate);
   const totalIncome =
     nonNegativeInputs.reduce((total, value) => total + value, 0);
-  const personalAllowance = getPersonalAllowance(totalIncome, rules);
-  const incomeTax = calculateIncomeTax(inputs, rules, totalIncome);
+  const adjustedNetIncome = Math.max(0, totalIncome - pensionContributions);
+  const personalAllowance = getPersonalAllowance(adjustedNetIncome, rules);
+  const incomeTax = calculateIncomeTax(inputs, rules, adjustedNetIncome);
   const nationalInsurance = calculateNationalInsurance(
     inputs.employmentIncomes,
     inputs.age,
     inputs.statePensionAge,
     rules,
   );
-  const taxableIncome = Math.max(0, totalIncome - personalAllowance);
+  const taxableIncome = Math.max(
+    0,
+    adjustedNetIncome - personalAllowance,
+  );
   const capitalGainsTax = calculateCapitalGainsTax(
     taxableIncome,
     inputs.capitalGains,

@@ -9,12 +9,15 @@ import {
 import { savedPlanSchema } from "../validation/retirement-plan-schema";
 
 test("legacy saved plans receive mortgage and property defaults", () => {
+  const legacyWithdrawalOrder = ["gia", "cash", "pension", "isa"];
   const legacyPlan = Object.fromEntries(
     Object.entries(createSampleRetirementPlan()).filter(
       ([key]) =>
         key !== "mortgageConfiguration" && key !== "propertyInformation",
     ),
   );
+  legacyPlan.taxSettings = { jurisdiction: "england" };
+  legacyPlan.withdrawalOrder = legacyWithdrawalOrder;
 
   const parsed = savedPlanSchema.parse({
     version: 1,
@@ -25,6 +28,11 @@ test("legacy saved plans receive mortgage and property defaults", () => {
   assert.equal(parsed.plan.mortgageConfiguration.name, "Main residence");
   assert.equal(parsed.plan.mortgageConfiguration.repaymentType, "repayment");
   assert.equal(parsed.plan.propertyInformation.estimatedValue, 300_000);
+  assert.equal(parsed.plan.taxSettings.minimumCashReserve, 10_000);
+  assert.deepEqual(
+    parsed.plan.taxSettings.withdrawalPriority,
+    legacyWithdrawalOrder,
+  );
 });
 
 test("future mortgage rate respects remortgage and rate method selections", () => {

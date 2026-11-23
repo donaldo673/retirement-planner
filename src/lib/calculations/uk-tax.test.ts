@@ -92,6 +92,21 @@ test("marginal employment rate includes income tax and applicable National Insur
   assert.ok(Math.abs(atStatePensionAge.combined - 0.4) < 1e-10);
 });
 
+test("gross pension contributions reduce adjusted income and income tax", () => {
+  const withoutContribution = calculateUkTax(
+    taxInputs({ employmentIncomes: [100_000] }),
+  );
+  const withContribution = calculateUkTax(
+    taxInputs({
+      employmentIncomes: [100_000],
+      pensionContributions: 10_000,
+    }),
+  );
+
+  assert.ok(withContribution.incomeTax < withoutContribution.incomeTax);
+  assert.ok(withContribution.taxableIncome < withoutContribution.taxableIncome);
+});
+
 test("savings and dividends use their allowances and current rates", () => {
   const result = calculateUkTax(
     taxInputs({

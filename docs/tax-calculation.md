@@ -21,11 +21,23 @@ onward.
 - State Pension, taxable rental profit, other taxable income, and gross private
   pension withdrawals are included in taxable income. Pension withdrawals are
   treated as fully taxable; tax-free lump sums and UFPLS are not modeled.
+- Gross pension contributions reduce adjusted net income and income tax.
+  Contribution funding uses the resulting tax reduction to estimate the net
+  cash cost. The projection limits contributions to £60,000 per person and
+  relevant earned income; it does not model carry-forward or the tapered
+  annual allowance.
 - GIA interest and dividends are generated from real-yield assumptions and
   taxed as income. ISA and pension investment returns are tax-sheltered.
 - GIA capital growth is untaxed until withdrawal. Realized gains use the
   supplied cost basis proportionally and the annual CGT exemption and rates.
   GIA/cash interest, dividends, and realized gains are attributed to Person 1.
+- When automatic optimisation is enabled, surplus accumulation cashflow follows
+  the configured account priority, subject to a £20,000 annual ISA allowance,
+  pension limits, and the minimum cash reserve. During a spending deficit, the
+  projection compares all 24 withdrawal orders and chooses the least gross
+  withdrawal that covers the need, then the lowest-tax result.
+- Configured mortgage monthly and annual overpayments are included in cashflow
+  and reduce the projected mortgage balance and future interest.
 - Thresholds remain fixed through 2027/28 and are indexed from 2028/29 using
   the plan's general inflation assumption. Rates are not inflation-adjusted.
 
@@ -38,9 +50,12 @@ realized loss is not taxed or carried forward.
 
 ## Important limitations
 
-This is a planning estimate, not a tax return calculation or tax advice. It
-does not model employer National Insurance, tax relief on pension
-contributions, tax-free pension cash, marriage or other personal allowances,
+This is a planning estimate, not a tax return calculation or tax advice. The
+automatic account choices are annual, greedy estimates rather than a global
+optimisation across every future tax year. The model assumes gross personal
+pension contributions qualify for relief within its limits; it does not model
+employer National Insurance, pension carry-forward, the tapered annual
+allowance, tax-free pension cash, marriage or other personal allowances,
 property/trading allowances, foreign income, capital-loss carryforwards, or
 share-identification rules for CGT (including same-day and 30-day matching).
 Investment income is generated from annual real yields, rather than individual

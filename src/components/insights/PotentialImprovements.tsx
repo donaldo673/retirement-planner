@@ -16,16 +16,16 @@ export function PotentialImprovements({
     >
       <div className="mb-4">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">
-          Data-backed ideas
+          Scenario exploration
         </p>
         <h2
           className="mt-1 text-xl font-semibold tracking-tight text-slate-950 dark:text-white"
           id="potential-improvements-heading"
         >
-          Potential improvements
+          Explore Alternatives
         </h2>
         <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          These are options to explore, not recommendations to change your plan.
+          These modelled alternatives are for comparison only, not instructions to change your plan.
         </p>
       </div>
       {opportunities.length > 0 ? (

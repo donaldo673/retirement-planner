@@ -1,17 +1,11 @@
-import type {
-  ProjectionStatus,
-  ProjectionYear,
-  RetirementSummary,
-} from "@/types/retirement";
-import { FIProgress } from "./FIProgress";
-import { KPICard, type KPITone } from "./KPICard";
-import { RetirementStatus } from "./RetirementStatus";
+import type { ProjectionYear, RetirementSummary } from "@/types/retirement";
 
 interface DashboardSummaryProps {
   summary: RetirementSummary;
-  currentAge: number;
   retirementAge: number;
-  firstProjectionYear: ProjectionYear;
+  lifeExpectancy: number;
+  retirementYear?: ProjectionYear;
+  lifeExpectancyYear?: ProjectionYear;
 }
 
 const currencyFormatter = new Intl.NumberFormat("en-GB", {
@@ -24,151 +18,82 @@ function formatCurrency(value: number): string {
   return currencyFormatter.format(value);
 }
 
-function statusTone(status: ProjectionStatus): KPITone {
-  if (status === "red") {
-    return "red";
-  }
-  if (status === "amber") {
-    return "amber";
-  }
-  return "green";
-}
-
 export function DashboardSummary({
   summary,
-  currentAge,
   retirementAge,
-  firstProjectionYear,
+  lifeExpectancy,
+  retirementYear,
+  lifeExpectancyYear,
 }: DashboardSummaryProps) {
-  const outcomeTone = statusTone(summary.status);
-  const yearsToFI =
-    summary.financialIndependenceAge === null
-      ? null
-      : summary.financialIndependenceAge - currentAge;
-  const isFIReached = yearsToFI !== null && yearsToFI <= 0;
+  const finalNetWorth =
+    lifeExpectancyYear?.netWorth ?? summary.finalEstateValue;
+  const metrics = [
+    {
+      label: "Projected net worth at retirement",
+      value: formatCurrency(summary.retirementNetWorth),
+      context: `At age ${retirementAge}, under current assumptions`,
+    },
+    {
+      label: "Projected annual retirement income",
+      value: retirementYear
+        ? formatCurrency(retirementYear.totalIncome)
+        : "Not available",
+      context: retirementYear
+        ? `Before tax at age ${retirementAge} · planned spending ${formatCurrency(retirementYear.spending)} · mortgage payment ${formatCurrency(retirementYear.mortgagePayment)}`
+        : `Modelled total income before tax at age ${retirementAge}`,
+    },
+    {
+      label: "First projected funding shortfall",
+      value:
+        summary.ageAssetsRunOut === null
+          ? "No shortfall within projection period"
+          : `Age ${summary.ageAssetsRunOut}`,
+      context:
+        summary.ageAssetsRunOut === null
+          ? "No shortfall is shown in this projection"
+          : "First year planned expenditure exceeds available funds",
+    },
+    {
+      label: "Projected net worth at life expectancy",
+      value: formatCurrency(finalNetWorth),
+      context: `At selected age ${lifeExpectancy}`,
+    },
+  ];
 
   return (
-    <div className="space-y-4">
-      <RetirementStatus status={summary.status} />
-
-      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <KPICard
-          icon="wallet"
-          label="Current net worth"
-          statusLabel="Today"
-          supportingText="After your mortgage and other liabilities"
-          tone="teal"
-          value={formatCurrency(summary.currentNetWorth)}
-        />
-        <KPICard
-          icon="chart"
-          label="Retirement pot at retirement"
-          statusLabel={summary.status === "green" ? "On track" : "Review"}
-          supportingText={`Projected at age ${retirementAge}`}
-          tone={outcomeTone}
-          value={formatCurrency(summary.retirementNetWorth)}
-        />
-        <KPICard
-          icon="target"
-          label="Financial independence age"
-          statusLabel={
-            isFIReached ? "Reached" : summary.financialIndependenceAge === null ? "Not reached" : "Projected"
-          }
-          supportingText={
-            summary.financialIndependenceAge === null
-              ? "Not reached within this projection"
-              : isFIReached
-                ? "Your projected FI milestone has been reached"
-                : `${yearsToFI} ${yearsToFI === 1 ? "year" : "years"} from your current age`
-          }
-          tone={
-            summary.financialIndependenceAge === null
-              ? "amber"
-              : isFIReached
-                ? "green"
-                : "teal"
-          }
-          value={
-            summary.financialIndependenceAge === null
-              ? "Not reached"
-              : `Age ${summary.financialIndependenceAge}`
-          }
-        />
-        <KPICard
-          icon="calendar"
-          label="Retirement age"
-          statusLabel="Your target"
-          supportingText="The age your retirement plan begins"
-          tone="slate"
-          value={`Age ${retirementAge}`}
-        />
-        <KPICard
-          icon="home"
-          label="Final estate"
-          statusLabel={
-            summary.status === "green"
-              ? "On track"
-              : summary.status === "amber"
-                ? "Worth reviewing"
-                : "At risk"
-          }
-          supportingText="Projected at the end of your planning horizon"
-          tone={outcomeTone}
-          value={formatCurrency(summary.finalEstateValue)}
-        />
-        <KPICard
-          icon="alert"
-          label="Assets depleted age"
-          statusLabel={summary.ageAssetsRunOut === null ? "Not projected" : "At risk"}
-          supportingText={
-            summary.ageAssetsRunOut === null
-              ? "No spending shortfall is projected"
-              : "A shortfall is projected from this age"
-          }
-          tone={summary.ageAssetsRunOut === null ? "green" : "red"}
-          value={
-            summary.ageAssetsRunOut === null
-              ? "Not projected"
-              : `Age ${summary.ageAssetsRunOut}`
-          }
-        />
-      </div>
-
-      <div className="grid gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 sm:grid-cols-2 sm:p-5 dark:border-slate-800 dark:bg-slate-900">
-        <div>
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-            Total projected retirement spending
-          </p>
-          <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">
-            {formatCurrency(summary.totalRetirementSpending)}
-          </p>
-        </div>
-        <div className="sm:border-l sm:border-slate-200 sm:pl-5 dark:sm:border-slate-700">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-            Estimated tax ({firstProjectionYear.taxYear}/
-            {String(firstProjectionYear.taxYear + 1).slice(-2)})
-          </p>
-          <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">
-            {formatCurrency(firstProjectionYear.tax.totalTax)}
-          </p>
-          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-            Income tax {formatCurrency(firstProjectionYear.tax.incomeTax)} · NI{" "}
-            {formatCurrency(firstProjectionYear.tax.nationalInsurance)} · CGT{" "}
-            {formatCurrency(firstProjectionYear.tax.capitalGainsTax)}
-          </p>
-        </div>
-      </div>
-
-      <FIProgress
-        currentAge={currentAge}
-        financialIndependenceAge={summary.financialIndependenceAge}
-        retirementAge={retirementAge}
-      />
-      <p className="px-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-        Tax estimates include generated GIA interest, dividends, realized gains,
-        and taxable pension withdrawals. Estimates do not include fees or
-        investment volatility.
+    <div className="space-y-5">
+      <p className="rounded-xl border-l-4 border-teal-700 bg-white px-4 py-3 text-sm leading-6 text-slate-700 dark:border-teal-400 dark:bg-slate-900 dark:text-slate-200">
+        {summary.ageAssetsRunOut === null
+          ? `Based on your current assumptions, projected assets cover planned expenditure through age ${lifeExpectancy}. This is an illustration, not a guarantee of future outcomes.`
+          : `Based on your current assumptions, a funding shortfall is first projected at age ${summary.ageAssetsRunOut}. Actual outcomes may differ.`}
       </p>
+      {summary.ageAssetsRunOut !== null &&
+        finalNetWorth > 0 && (
+          <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+            A positive net worth can coexist with a projected funding shortfall:
+            amounts recorded as Other Assets are included in net worth but are
+            not used in modeled withdrawals. See Detailed Finances for the
+            asset breakdown.
+          </p>
+        )}
+      <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric) => (
+          <div
+            className="min-w-0 border-b border-slate-200 pb-4 dark:border-slate-800"
+            key={metric.label}
+          >
+            <dt className="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
+              {metric.label}
+            </dt>
+            <dd className="mt-1 break-words text-xl font-semibold tabular-nums tracking-tight text-slate-950 dark:text-white">
+              {metric.value}
+            </dd>
+            <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+              {metric.context}
+            </p>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }

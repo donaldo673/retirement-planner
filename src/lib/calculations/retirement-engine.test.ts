@@ -31,7 +31,7 @@ test("projection reports account-level contributions and investment income", () 
   const plan = createSampleRetirementPlan();
   plan.personalDetails = {
     retirementAge: 66,
-    lifeExpectancy: 66,
+    lifeExpectancy: 67,
     householdType: "single",
   };
   plan.people.person1.income.currentAge = 65;
@@ -63,6 +63,8 @@ test("projection reports account-level contributions and investment income", () 
     monthlyContribution: 30,
   };
   plan.assets.cash.currentValue = 4_000;
+  plan.taxSettings.minimumCashReserve = 0;
+  plan.taxSettings.optimiseTaxAutomatically = false;
   plan.assets.otherAssets.currentValue = 0;
   plan.assets.mortgage = {
     outstandingBalance: 0,
@@ -83,12 +85,10 @@ test("projection reports account-level contributions and investment income", () 
 
   const year = calculateProjection(plan).yearlyResults[1];
 
-  assert.deepEqual(year.accountInvestmentIncome, {
-    isa: 100,
-    pension: 400,
-    gia: 180,
-    cash: 160,
-  });
+  assert.ok(Math.abs(year.accountInvestmentIncome.isa - 100) < 1e-8);
+  assert.ok(Math.abs(year.accountInvestmentIncome.pension - 400) < 1e-8);
+  assert.ok(Math.abs(year.accountInvestmentIncome.gia - 180) < 1e-8);
+  assert.ok(Math.abs(year.accountInvestmentIncome.cash - 160) < 1e-8);
   assert.equal(year.accountNetContributions.isa, 120);
   assert.equal(year.accountNetContributions.pension, 240);
   assert.equal(year.accountNetContributions.gia, 360);
@@ -108,6 +108,8 @@ test("deficits use the configured withdrawal order and report any shortfall", ()
   plan.people.person1.assets.pension = { currentValue: 0, monthlyContribution: 0 };
   plan.assets.gia = { currentValue: 500, costBasis: 500, monthlyContribution: 0 };
   plan.assets.cash = { currentValue: 1_000 };
+  plan.taxSettings.minimumCashReserve = 0;
+  plan.taxSettings.optimiseTaxAutomatically = false;
   plan.assets.otherAssets = { currentValue: 0 };
   plan.assets.mortgage = {
     outstandingBalance: 0,
@@ -167,6 +169,7 @@ test("mortgage maturity clears the remaining balance and charges the payoff", ()
   plan.people.person1.assets.pension = { currentValue: 0, monthlyContribution: 0 };
   plan.assets.gia = { currentValue: 0, costBasis: 0, monthlyContribution: 0 };
   plan.assets.cash = { currentValue: 2_000 };
+  plan.taxSettings.minimumCashReserve = 0;
   plan.assets.otherAssets = { currentValue: 0 };
   plan.assets.mortgage = {
     outstandingBalance: 1_000,
@@ -181,6 +184,7 @@ test("mortgage maturity clears the remaining balance and charges the payoff", ()
   };
   plan.people.person1.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
   plan.people.person1.income.statePension = { annualAmount: 0 };
+  plan.taxSettings.optimiseTaxAutomatically = false;
   plan.spending.buckets = [];
   plan.assumptions = {
     isaRealReturn: 0,
@@ -197,6 +201,63 @@ test("mortgage maturity clears the remaining balance and charges the payoff", ()
   assert.equal(yearAtAge66.mortgagePayment, 1_000);
   assert.equal(yearAtAge66.mortgageBalance, 0);
   assert.equal(yearAtAge66.cashValue, 1_000);
+});
+
+test("configured mortgage overpayments reduce future interest and balance", () => {
+  const plan = createSampleRetirementPlan();
+  plan.personalDetails = {
+    retirementAge: 41,
+    lifeExpectancy: 42,
+    householdType: "single",
+  };
+  plan.people.person1.income.currentAge = 40;
+  plan.people.person1.income.statePensionAge = 120;
+  plan.people.person1.income.employment = {
+    currentSalary: 0,
+    annualSalaryGrowthRate: 0,
+    workUntilAge: 40,
+  };
+  plan.people.person1.income.statePension.annualAmount = 0;
+  plan.people.person1.assets.isa = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.assets.pension = {
+    currentValue: 0,
+    monthlyContribution: 0,
+  };
+  plan.assets.gia = { currentValue: 0, costBasis: 0, monthlyContribution: 0 };
+  plan.assets.cash.currentValue = 100_000;
+  plan.assets.mortgage = {
+    outstandingBalance: 100_000,
+    interestRate: 0.12,
+    monthlyPayment: 1_000,
+    mortgageEndAge: 42,
+  };
+  plan.spending.buckets = [];
+  plan.assumptions = {
+    isaRealReturn: 0,
+    pensionRealReturn: 0,
+    giaInterestRealYield: 0,
+    giaDividendRealYield: 0,
+    giaCapitalGrowthRealYield: 0,
+    cashInterestRealYield: 0,
+    inflationRate: 0,
+  };
+
+  const baseline = calculateProjection(plan).yearlyResults;
+  plan.mortgageConfiguration.monthlyOverpayment = 500;
+  plan.mortgageConfiguration.annualLumpSumOverpayment = 5_000;
+  const projected = calculateProjection(plan).yearlyResults;
+  const withoutOverpayments = baseline[1];
+  const withOverpayments = projected[1];
+
+  assert.ok(withOverpayments.mortgagePayment > withoutOverpayments.mortgagePayment);
+  assert.ok(withOverpayments.mortgageBalance < withoutOverpayments.mortgageBalance);
+  const baselineInterest =
+    baseline[2].mortgagePayment -
+    (baseline[1].mortgageBalance - baseline[2].mortgageBalance);
+  const overpaidInterest =
+    projected[2].mortgagePayment -
+    (projected[1].mortgageBalance - projected[2].mortgageBalance);
+  assert.ok(overpaidInterest < baselineInterest);
 });
 
 test("scenarios adjust returns without mutating plan assumptions", () => {
@@ -336,6 +397,7 @@ test("second employment and generated investment income flow through tax", () =>
     startAge: 40,
     endAge: 41,
   };
+  plan.taxSettings.optimiseTaxAutomatically = false;
   plan.people.person1.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
   plan.people.person1.income.statePension = { annualAmount: 0 };
   plan.spending.buckets = [];
@@ -483,7 +545,9 @@ test("selling GIA investments realizes proportional gains and includes CGT", () 
     cashInterestRealYield: 0,
     inflationRate: 0,
   };
-  plan.withdrawalOrder = ["gia", "cash", "isa", "pension"];
+  plan.taxSettings.withdrawalPriority = ["gia", "cash", "isa", "pension"];
+  plan.taxSettings.minimumCashReserve = 0;
+  plan.taxSettings.optimiseTaxAutomatically = false;
 
   const year = calculateProjection(plan).yearlyResults[1];
 
@@ -509,6 +573,7 @@ test("negative real cash yields are accepted and reduce projected cash", () => {
     monthlyContribution: 0,
   };
   plan.assets.cash = { currentValue: 1_000 };
+  plan.taxSettings.minimumCashReserve = 0;
   plan.assets.otherAssets = { currentValue: 0 };
   plan.assets.mortgage = {
     outstandingBalance: 0,
@@ -558,6 +623,7 @@ test("joint households calculate tax separately and advance each person's age", 
   plan.people.person1.income.statePensionAge = 120;
   plan.people.person1.income.employment.currentSalary = 20_000;
   plan.people.person1.income.employment.workUntilAge = 41;
+  plan.taxSettings.optimiseTaxAutomatically = false;
   plan.people.person2.income.currentAge = 38;
   plan.people.person2.income.statePensionAge = 120;
   plan.people.person2.income.employment.currentSalary = 30_000;
@@ -663,9 +729,203 @@ test("joint pension withdrawals are allocated proportionally and taxed per perso
 
   const year = calculateProjection(plan).yearlyResults[1];
 
-  assert.equal(year.withdrawals.byPerson.person1.pensionWithdrawal, 9_000);
-  assert.equal(year.withdrawals.byPerson.person2.pensionWithdrawal, 9_000);
+  assert.ok(
+    Math.abs(year.withdrawals.byPerson.person1.pensionWithdrawal - 9_000) <
+      0.01,
+  );
+  assert.ok(
+    Math.abs(year.withdrawals.byPerson.person2.pensionWithdrawal - 9_000) <
+      0.01,
+  );
   assert.equal(year.personTaxes.person1.incomeTax, 0);
   assert.equal(year.personTaxes.person2.incomeTax, 0);
   assert.equal(year.unfundedShortfall, 0);
+});
+
+test("automatic accumulation uses pension tax relief and account priority", () => {
+  const plan = createSampleRetirementPlan();
+  plan.personalDetails = {
+    retirementAge: 66,
+    lifeExpectancy: 67,
+    householdType: "single",
+  };
+  plan.people.person1.income.currentAge = 65;
+  plan.people.person1.income.statePensionAge = 120;
+  plan.people.person1.income.employment = {
+    currentSalary: 30_000,
+    annualSalaryGrowthRate: 0,
+    workUntilAge: 66,
+  };
+  plan.people.person1.income.secondEmployment = {
+    currentSalary: 0,
+    annualSalaryGrowthRate: 0,
+    startAge: 65,
+    endAge: 66,
+  };
+  plan.people.person1.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
+  plan.people.person1.income.statePension = { annualAmount: 0 };
+  plan.people.person1.assets.isa = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.assets.pension = {
+    currentValue: 0,
+    monthlyContribution: 0,
+  };
+  plan.assets.gia = { currentValue: 0, costBasis: 0, monthlyContribution: 0 };
+  plan.assets.cash.currentValue = 0;
+  plan.assets.otherAssets.currentValue = 0;
+  plan.assets.mortgage = {
+    outstandingBalance: 0,
+    interestRate: 0,
+    monthlyPayment: 0,
+    mortgageEndAge: 66,
+  };
+  plan.spending.buckets = [];
+  plan.taxSettings.minimumCashReserve = 0;
+  plan.taxSettings.accumulationPriority = ["pension", "isa", "gia", "cash"];
+  plan.assumptions = {
+    isaRealReturn: 0,
+    pensionRealReturn: 0,
+    giaInterestRealYield: 0,
+    giaDividendRealYield: 0,
+    giaCapitalGrowthRealYield: 0,
+    cashInterestRealYield: 0,
+    inflationRate: 0,
+  };
+
+  const year = calculateProjection(plan).yearlyResults[1];
+
+  assert.ok(year.contributions.pensionContribution > 25_000);
+  assert.equal(year.tax.incomeTax, 0);
+  assert.equal(
+    year.pensionValue,
+    year.contributions.pensionContribution,
+  );
+});
+
+test("withdrawals preserve the minimum cash reserve before using other accounts", () => {
+  const plan = createSampleRetirementPlan();
+  plan.personalDetails = {
+    retirementAge: 46,
+    lifeExpectancy: 47,
+    householdType: "single",
+  };
+  plan.people.person1.income.currentAge = 45;
+  plan.people.person1.income.statePensionAge = 120;
+  plan.people.person1.income.employment = {
+    currentSalary: 0,
+    annualSalaryGrowthRate: 0,
+    workUntilAge: 45,
+  };
+  plan.people.person1.income.statePension.annualAmount = 0;
+  plan.people.person1.assets.isa = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.assets.pension = {
+    currentValue: 0,
+    monthlyContribution: 0,
+  };
+  plan.assets.gia = {
+    currentValue: 20_000,
+    costBasis: 20_000,
+    monthlyContribution: 0,
+  };
+  plan.assets.cash.currentValue = 15_000;
+  plan.assets.otherAssets.currentValue = 0;
+  plan.assets.mortgage = {
+    outstandingBalance: 0,
+    interestRate: 0,
+    monthlyPayment: 0,
+    mortgageEndAge: 47,
+  };
+  plan.spending.buckets = [
+    {
+      id: "essential",
+      name: "Essential spending",
+      annualAmount: 7_000,
+      inflationRate: 0,
+      startAge: 45,
+      endAge: 45,
+    },
+  ];
+  plan.taxSettings.minimumCashReserve = 10_000;
+  plan.taxSettings.optimiseTaxAutomatically = false;
+  plan.taxSettings.withdrawalPriority = ["cash", "gia", "isa", "pension"];
+  plan.assumptions = {
+    isaRealReturn: 0,
+    pensionRealReturn: 0,
+    giaInterestRealYield: 0,
+    giaDividendRealYield: 0,
+    giaCapitalGrowthRealYield: 0,
+    cashInterestRealYield: 0,
+    inflationRate: 0,
+  };
+
+  const year = calculateProjection(plan).yearlyResults[1];
+
+  assert.equal(year.withdrawals.cashWithdrawal, 5_000);
+  assert.equal(year.withdrawals.giaWithdrawal, 2_000);
+  assert.equal(year.cashValue, 10_000);
+  assert.equal(year.unfundedShortfall, 0);
+});
+
+test("automatic withdrawal selection avoids unnecessary taxable GIA gains", () => {
+  const plan = createSampleRetirementPlan();
+  plan.personalDetails = {
+    retirementAge: 46,
+    lifeExpectancy: 47,
+    householdType: "single",
+  };
+  plan.people.person1.income.currentAge = 45;
+  plan.people.person1.income.statePensionAge = 120;
+  plan.people.person1.income.employment = {
+    currentSalary: 0,
+    annualSalaryGrowthRate: 0,
+    workUntilAge: 45,
+  };
+  plan.people.person1.income.statePension.annualAmount = 0;
+  plan.people.person1.assets.isa = {
+    currentValue: 10_000,
+    monthlyContribution: 0,
+  };
+  plan.people.person1.assets.pension = {
+    currentValue: 0,
+    monthlyContribution: 0,
+  };
+  plan.assets.gia = {
+    currentValue: 10_000,
+    costBasis: 0,
+    monthlyContribution: 0,
+  };
+  plan.assets.cash.currentValue = 0;
+  plan.assets.otherAssets.currentValue = 0;
+  plan.assets.mortgage = {
+    outstandingBalance: 0,
+    interestRate: 0,
+    monthlyPayment: 0,
+    mortgageEndAge: 47,
+  };
+  plan.spending.buckets = [
+    {
+      id: "essential",
+      name: "Essential spending",
+      annualAmount: 10_000,
+      inflationRate: 0,
+      startAge: 45,
+      endAge: 45,
+    },
+  ];
+  plan.taxSettings.minimumCashReserve = 0;
+  plan.taxSettings.optimiseTaxAutomatically = true;
+  plan.assumptions = {
+    isaRealReturn: 0,
+    pensionRealReturn: 0,
+    giaInterestRealYield: 0,
+    giaDividendRealYield: 0,
+    giaCapitalGrowthRealYield: 0,
+    cashInterestRealYield: 0,
+    inflationRate: 0,
+  };
+
+  const year = calculateProjection(plan).yearlyResults[1];
+
+  assert.equal(year.withdrawals.isaWithdrawal, 10_000);
+  assert.equal(year.withdrawals.giaWithdrawal, 0);
+  assert.equal(year.tax.capitalGainsTax, 0);
 });

@@ -9,13 +9,13 @@ import { MortgageForm } from "@/components/mortgages/MortgageForm";
 import { calculateMarginalEmploymentTaxRates } from "@/lib/calculations/uk-tax";
 import type {
   AnnualPersonIncome,
+  AccountType,
   PersonKey,
   ProjectionResult,
   ProjectionYear,
   RetirementPlan,
   TaxInputs,
   TaxResult,
-  WithdrawalSource,
 } from "@/types/retirement";
 
 interface SectionProps {
@@ -34,12 +34,12 @@ function FormSection({
   children,
 }: SectionProps) {
   return (
-    <section
-      aria-labelledby={`${id}-heading`}
-      className="scroll-mt-24 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow duration-200 hover:shadow-md sm:p-7 dark:border-slate-800 dark:bg-slate-900"
+    <details
+      className="scroll-mt-24 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-7 dark:border-slate-800 dark:bg-slate-900"
       id={id}
+      open={id === "personal"}
     >
-      <div className="mb-6 flex items-start gap-3">
+      <summary className="mb-5 flex cursor-pointer items-start gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-600">
         <span
           aria-hidden="true"
           className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-teal-50 text-xs font-semibold text-teal-800 dark:bg-teal-950 dark:text-teal-200"
@@ -55,18 +55,33 @@ function FormSection({
           </h2>
           <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p>
         </div>
-      </div>
-      {children}
-    </section>
+      </summary>
+      <div>{children}</div>
+    </details>
   );
 }
 
-const withdrawalSources: { value: WithdrawalSource; label: string }[] = [
+const accountOptions: { value: AccountType; label: string }[] = [
   { value: "cash", label: "Cash" },
   { value: "gia", label: "General investment account" },
   { value: "isa", label: "ISA" },
   { value: "pension", label: "Pension" },
 ];
+
+const priorityFields = [
+  {
+    key: "accumulationPriority",
+    label: "Accumulation priority",
+    description:
+      "Choose where surplus income is invested after your planned contributions and cash reserve.",
+  },
+  {
+    key: "withdrawalPriority",
+    label: "Withdrawal priority",
+    description:
+      "Set the preferred order used when income does not cover spending.",
+  },
+] as const;
 
 function TaxBreakdown({
   tax,
@@ -173,10 +188,12 @@ export function RetirementPlanForm({
   personTaxes,
   projection,
   projectionYear,
+  onViewResults,
 }: {
   personTaxes?: Record<PersonKey, TaxResult>;
   projection?: ProjectionResult | null;
   projectionYear?: ProjectionYear;
+  onViewResults: () => void;
 }) {
   const {
     control,
@@ -233,10 +250,10 @@ export function RetirementPlanForm({
   return (
     <div className="space-y-5">
       <FormSection
-        description="Set the ages that define your planning timeline."
+        description="Set your household details and the ages that define your planning timeline."
         id="personal"
         number="01"
-        title="Personal details"
+        title="About you"
       >
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <NumberField
@@ -273,6 +290,18 @@ export function RetirementPlanForm({
               <option value="joint">Joint</option>
             </select>
           </div>
+          {availablePeople.map((personKey, index) => (
+            <NumberField
+              error={errors.people?.[personKey]?.income?.currentAge?.message}
+              key={personKey}
+              label={index === 0 ? "Your current age" : "Partner current age"}
+              max={120}
+              min={0}
+              name={`people.${personKey}.income.currentAge`}
+              step={1}
+              suffix="years"
+            />
+          ))}
         </div>
       </FormSection>
 
@@ -463,15 +492,6 @@ export function RetirementPlanForm({
                 Planning ages
               </h3>
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <NumberField
-                  error={personIncomeErrors?.currentAge?.message}
-                  label="Current age"
-                  max={120}
-                  min={0}
-                  name={`people.${activePerson}.income.currentAge`}
-                  step={1}
-                  suffix="years"
-                />
                 <NumberField
                   error={personIncomeErrors?.statePensionAge?.message}
                   label="State Pension age"
@@ -734,10 +754,10 @@ export function RetirementPlanForm({
       </FormSection>
 
       <FormSection
-        description="Tax jurisdiction and real yields affect annual tax and investment growth."
+        description="Set the tax jurisdiction, investment growth, inflation, and other assumptions used by the projection."
         id="assumptions"
         number="05"
-        title="Tax and investment assumptions"
+        title="Planning assumptions"
       >
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <div>
@@ -794,55 +814,118 @@ export function RetirementPlanForm({
             min={-100}
           />
         </div>
+
       </FormSection>
-
       <FormSection
-        description="Choose which accounts are drawn from first when income does not cover spending."
-        id="withdrawals"
+        description="Balance tax-efficient investing with accessible cash and a reliable retirement income."
+        id="tax-optimisation"
         number="06"
-        title="Withdrawal order"
+        title="Tax & Account Optimisation"
       >
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {withdrawalSources.map((_, index) => {
-            const fieldName = `withdrawalOrder.${index}` as const;
-            const error = errors.withdrawalOrder?.[index]?.message;
+        <div className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <NumberField
+              error={errors.taxSettings?.minimumCashReserve?.message}
+              label="Minimum cash reserve"
+              name="taxSettings.minimumCashReserve"
+              prefix="£"
+              description="Cash kept available before the planner draws on other accounts."
+            />
+            <label className="flex min-h-12 items-center gap-3 rounded-xl border border-slate-200 px-4 dark:border-slate-700">
+              <input
+                className="size-4 accent-teal-700"
+                type="checkbox"
+                {...register("taxSettings.optimiseTaxAutomatically")}
+              />
+              <span>
+                <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  Optimise tax automatically
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-slate-500 dark:text-slate-400">
+                  Compare withdrawal combinations and direct surplus contributions by priority.
+                </span>
+              </span>
+            </label>
+          </div>
 
-            return (
-              <div key={fieldName}>
-                <label
-                  className="form-label"
-                  htmlFor={`withdrawal-order-${index}`}
-                >
-                  {index + 1}
-                  {index === 0 ? "st" : index === 1 ? "nd" : index === 2 ? "rd" : "th"} source
-                </label>
-                <select
-                  aria-describedby={error ? `withdrawal-order-${index}-error` : undefined}
-                  aria-invalid={Boolean(error)}
-                  className="form-control"
-                  id={`withdrawal-order-${index}`}
-                  {...register(fieldName)}
-                >
-                  {withdrawalSources.map((source) => (
-                    <option key={source.value} value={source.value}>
-                      {source.label}
-                    </option>
-                  ))}
-                </select>
-                {error ? (
-                  <p
-                    className="mt-1.5 text-xs font-medium text-rose-600"
-                    id={`withdrawal-order-${index}-error`}
-                    role="alert"
-                  >
-                    {error}
-                  </p>
-                ) : null}
-              </div>
-            );
-          })}
+          <div className="grid gap-6 xl:grid-cols-2">
+            {priorityFields.map((priority) => (
+              <fieldset
+                className="rounded-xl border border-slate-200 p-4 dark:border-slate-700"
+                key={priority.key}
+              >
+                <legend className="px-1 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {priority.label}
+                </legend>
+                <p className="mb-4 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                  {priority.description}
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {accountOptions.map((_, index) => {
+                    const fieldName =
+                      `taxSettings.${priority.key}.${index}` as const;
+                    const error =
+                      errors.taxSettings?.[priority.key]?.[index]?.message;
+                    const fieldId = `${priority.key}-${index}`;
+
+                    return (
+                      <div key={fieldName}>
+                        <label className="form-label" htmlFor={fieldId}>
+                          {index + 1}
+                          {index === 0
+                            ? "st"
+                            : index === 1
+                              ? "nd"
+                              : index === 2
+                                ? "rd"
+                                : "th"}{" "}
+                          priority
+                        </label>
+                        <select
+                          aria-describedby={
+                            error ? `${fieldId}-error` : undefined
+                          }
+                          aria-invalid={Boolean(error)}
+                          className="form-control"
+                          id={fieldId}
+                          {...register(fieldName)}
+                        >
+                          {accountOptions.map((account) => (
+                            <option key={account.value} value={account.value}>
+                              {account.label}
+                            </option>
+                          ))}
+                        </select>
+                        {error ? (
+                          <p
+                            className="mt-1.5 text-xs font-medium text-rose-600"
+                            id={`${fieldId}-error`}
+                            role="alert"
+                          >
+                            {error}
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            ))}
+          </div>
         </div>
       </FormSection>
+      <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
+        <button
+          className="min-h-12 rounded-xl bg-slate-900 px-6 text-sm font-semibold text-white transition hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 dark:bg-teal-400 dark:text-slate-950 dark:hover:bg-teal-300"
+          onClick={onViewResults}
+          type="button"
+        >
+          View My Results
+        </button>
+        <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+          Valid inputs save automatically in this browser.
+        </p>
+      </div>
     </div>
   );
 }
