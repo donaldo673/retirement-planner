@@ -172,6 +172,26 @@ export function MortgageBasicFields({
             <option value="interest-only">Interest only</option>
           </select>
         </div>
+        <div className="min-w-0">
+          <label
+            className="form-label"
+            htmlFor="mortgage-end-of-term-treatment"
+          >
+            Mortgage End-of-Term Treatment
+          </label>
+          <select
+            className="form-control mt-2"
+            id="mortgage-end-of-term-treatment"
+            {...register("mortgageConfiguration.endOfTermTreatment")}
+          >
+            <option value="rollover">Roll into a new mortgage</option>
+            <option value="repay-from-gia">Repay from GIA assets</option>
+          </select>
+          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+            Any balance not repaid from the GIA is rolled over at the assumed
+            future mortgage rate.
+          </p>
+        </div>
       </div>
     </fieldset>
   );

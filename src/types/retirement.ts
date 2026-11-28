@@ -57,6 +57,8 @@ export type MortgageRepaymentStrategy =
   | "pension-lump-sum"
   | "other";
 
+export type MortgageEndOfTermTreatment = "rollover" | "repay-from-gia";
+
 export interface MortgageConfiguration {
   name: string;
   type: MortgageType;
@@ -67,8 +69,8 @@ export interface MortgageConfiguration {
   baseRate: number;
   margin: number;
   futureMortgageRate: number;
-  monthlyOverpayment: number;
-  annualLumpSumOverpayment: number;
+  annualMortgageOverpaymentTarget: number;
+  endOfTermTreatment: MortgageEndOfTermTreatment;
   repaymentType: MortgageRepaymentType;
   repaymentStrategy: MortgageRepaymentStrategy;
   rentalIncome: number;
@@ -252,7 +254,10 @@ export interface ProjectionYear {
 
   spending: number;
   mortgagePayment: number;
+  mortgageOverpayment: number;
+  mortgageGIARepayment: number;
   mortgageBalance: number;
+  targetIsaContribution: number;
   contributions: ContributionBreakdown;
   withdrawals: WithdrawalBreakdown;
   unfundedShortfall: number;

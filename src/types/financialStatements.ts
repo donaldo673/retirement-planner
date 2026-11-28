@@ -100,6 +100,8 @@ export interface AccountMovement {
   account: FinancialAccount;
   openingBalance: number | null;
   contributions: number | null;
+  targetContribution?: number;
+  mortgageGIARepayment?: number;
   withdrawals: number | null;
   investmentGrowth: number | null;
   closingBalance: number | null;

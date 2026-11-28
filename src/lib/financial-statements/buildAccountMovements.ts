@@ -10,6 +10,7 @@ function movement(
   contributions: number,
   withdrawals: number,
   closingBalance: number,
+  targetContribution?: number,
   note?: string,
 ): AnnualAccountMovement {
   const investmentGrowth =
@@ -19,6 +20,7 @@ function movement(
     account,
     openingBalance,
     contributions,
+    targetContribution,
     withdrawals,
     investmentGrowth,
     closingBalance,
@@ -46,6 +48,7 @@ export function buildAccountMovements(
       year.contributions.isaContribution,
       year.withdrawals.isaWithdrawal,
       year.isaValue,
+      year.targetIsaContribution,
     ),
     movement(
       "pension",
@@ -53,6 +56,7 @@ export function buildAccountMovements(
       year.contributions.pensionContribution,
       year.withdrawals.pensionWithdrawal,
       year.pensionValue,
+      undefined,
       "Pension withdrawals are treated as taxable drawdown by the existing model; tax-free lump sums are not separated.",
     ),
     movement(
@@ -61,6 +65,7 @@ export function buildAccountMovements(
       year.contributions.giaContribution,
       year.withdrawals.giaWithdrawal,
       year.giaValue,
+      undefined,
       "GIA withdrawals are disposal proceeds; any realized gains are recorded separately for tax.",
     ),
     {
@@ -83,6 +88,7 @@ export function buildAccountMovements(
       closingBalance: year.mortgageBalance,
       netChange: year.mortgageBalance - openingYear.mortgageBalance,
       payment: year.mortgagePayment,
+      mortgageGIARepayment: year.mortgageGIARepayment,
       note: "Mortgage payment is shown separately; principal and interest portions are not exposed.",
     },
   ];

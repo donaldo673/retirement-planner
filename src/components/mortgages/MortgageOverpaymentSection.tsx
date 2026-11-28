@@ -32,8 +32,7 @@ export function MortgageOverpaymentSection({
   );
 
   const overpaymentsAreConfigured =
-    configuration.monthlyOverpayment > 0 ||
-    configuration.annualLumpSumOverpayment > 0;
+    configuration.annualMortgageOverpaymentTarget > 0;
   const yearsSaved =
     currentPayoffAge !== null && payoffWithOverpayments !== null
       ? currentPayoffAge - payoffWithOverpayments
@@ -49,19 +48,15 @@ export function MortgageOverpaymentSection({
           Overpayments
         </h3>
         <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-          Add optional extra payments to see an illustrative payoff estimate.
+          Set an annual target; the projection only overpays from surplus funds
+          remaining after spending, mortgage payments, and the target ISA
+          contribution.
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <NumberField
-          label="Monthly Overpayment"
-          name="mortgageConfiguration.monthlyOverpayment"
-          prefix="£"
-          suffix="/ month"
-        />
-        <NumberField
-          label="Annual Lump Sum Overpayment"
-          name="mortgageConfiguration.annualLumpSumOverpayment"
+          label="Annual Mortgage Overpayment Target (£)"
+          name="mortgageConfiguration.annualMortgageOverpaymentTarget"
           prefix="£"
           suffix="/ year"
         />
@@ -97,8 +92,9 @@ export function MortgageOverpaymentSection({
         </p>
       )}
       <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
-        This estimate uses the entered payment and rate assumptions. It is
-        separate from, and does not change, the retirement projection.
+        The payoff estimate assumes the target is affordable each year. The
+        retirement projection limits overpayments to the surplus actually
+        available after planned spending and contributions.
       </p>
     </section>
   );
