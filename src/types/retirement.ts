@@ -109,6 +109,7 @@ export interface SecondEmploymentIncome {
   currentSalary: number;
   annualSalaryGrowthRate: number;
   startAge: number;
+  startAtRetirementAge: boolean;
   endAge: number;
 }
 
@@ -141,6 +142,7 @@ export interface PersonPlan {
 export interface SpendingBucket {
   id: string;
   name: string;
+  classification: "essential" | "discretionary";
   annualAmount: number;
   inflationRate: number;
   startAge: number;
@@ -149,6 +151,7 @@ export interface SpendingBucket {
 
 export interface SpendingPlan {
   buckets: SpendingBucket[];
+  discretionarySpendingAdjustmentPercent: number;
 }
 
 export interface Assumptions {

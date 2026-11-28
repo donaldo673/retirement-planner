@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Retirement Planner | Plan your future",
+  title: "Pendulum Retirement Plan",
   description:
-    "Build a personal retirement plan and explore an illustrative projection of your future finances.",
+    "Plan retirement with clear projections, tax-aware insights, and flexible scenarios.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

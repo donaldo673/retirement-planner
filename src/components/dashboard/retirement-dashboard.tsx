@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { DashboardSummary } from "@/components/dashboard/DashboardSummary";
@@ -85,6 +86,8 @@ export function RetirementDashboard() {
     null,
   );
   const watchedPlan = useWatch({ control: form.control });
+  const discretionarySpendingAdjustmentPercent =
+    watchedPlan.spending?.discretionarySpendingAdjustmentPercent ?? 100;
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -292,16 +295,26 @@ export function RetirementDashboard() {
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
         <div className="mx-auto flex min-h-16 max-w-[1440px] flex-wrap items-center justify-between gap-2 px-3 py-2 sm:flex-nowrap sm:gap-4 sm:px-6 sm:py-0 lg:px-8">
           <a
-            aria-label="FP Futureplan"
-            className="flex shrink-0 items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-600"
+            aria-label="Pendulum Retirement Plan"
+            className="flex shrink-0 items-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-600"
             href="#main-content"
           >
-            <span className="grid size-9 place-items-center rounded-lg bg-slate-900 text-xs font-bold text-white dark:bg-teal-400 dark:text-slate-950">
-              FP
-            </span>
-            <span className="hidden text-sm font-semibold text-slate-950 sm:inline dark:text-white">
-              Futureplan
-            </span>
+            <Image
+              alt="Pendulum Retirement Plan"
+              className="h-11 w-auto dark:hidden"
+              height={64}
+              priority
+              src="/assets/brand/pendulum-horizontal-light.svg"
+              width={300}
+            />
+            <Image
+              alt="Pendulum Retirement Plan"
+              className="hidden h-11 w-auto dark:block"
+              height={64}
+              priority
+              src="/assets/brand/pendulum-horizontal-dark.svg"
+              width={300}
+            />
           </a>
           <nav
             aria-label="Main navigation"
@@ -557,6 +570,62 @@ export function RetirementDashboard() {
                       >
                         <span>{currentAge + 1}</span>
                         <span>{lifeExpectancy - 1}</span>
+                      </div>
+                    </div>
+                  </section>
+                  <section
+                    aria-labelledby="discretionary-adjustment-heading"
+                    className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900"
+                  >
+                    <div>
+                      <h3
+                        className="text-base font-semibold text-slate-950 dark:text-white"
+                        id="discretionary-adjustment-heading"
+                      >
+                        Adjust discretionary spending after retirement
+                      </h3>
+                      <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                        Set discretionary categories to 70%–130% of their
+                        planned amount from retirement age. Essential spending
+                        is unchanged. This setting is saved with your plan.
+                      </p>
+                    </div>
+                    <div className="mt-4">
+                      <label
+                        className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-800 dark:text-slate-100"
+                        htmlFor="discretionary-spending-adjustment"
+                      >
+                        <span>Spending adjustment</span>
+                        <output
+                          aria-live="polite"
+                          htmlFor="discretionary-spending-adjustment"
+                        >
+                          {discretionarySpendingAdjustmentPercent}%
+                        </output>
+                      </label>
+                      <input
+                        className="mt-3 min-h-8 w-full accent-teal-700"
+                        id="discretionary-spending-adjustment"
+                        max={130}
+                        min={70}
+                        onChange={(event) => {
+                          form.setValue(
+                            "spending.discretionarySpendingAdjustmentPercent",
+                            Number(event.target.value),
+                            { shouldDirty: true, shouldValidate: true },
+                          );
+                          setCanSavePlan(true);
+                        }}
+                        step={1}
+                        type="range"
+                        value={discretionarySpendingAdjustmentPercent}
+                      />
+                      <div
+                        aria-hidden="true"
+                        className="flex justify-between text-xs text-slate-500 dark:text-slate-400"
+                      >
+                        <span>70%</span>
+                        <span>130%</span>
                       </div>
                     </div>
                   </section>

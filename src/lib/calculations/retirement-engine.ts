@@ -89,6 +89,18 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
 
   assertAge("Retirement age", personalDetails.retirementAge);
   assertAge("Life expectancy", personalDetails.lifeExpectancy);
+  assertFiniteNonNegative(
+    "Post-retirement discretionary spending adjustment",
+    spending.discretionarySpendingAdjustmentPercent,
+  );
+  if (
+    spending.discretionarySpendingAdjustmentPercent < 70 ||
+    spending.discretionarySpendingAdjustmentPercent > 130
+  ) {
+    throw new RangeError(
+      "Post-retirement discretionary spending adjustment must be between 70% and 130%.",
+    );
+  }
   assertAge("Mortgage end age", assets.mortgage.mortgageEndAge);
   for (const personKey of ["person1", "person2"] as const) {
     const person = people[personKey];
@@ -275,9 +287,15 @@ function calculateSpending(plan: RetirementPlan, age: number): number {
     }
 
     const yearsInflated = age - bucket.startAge;
+    const categorySpending =
+      bucket.annualAmount * (1 + bucket.inflationRate) ** yearsInflated;
     return (
       total +
-      bucket.annualAmount * (1 + bucket.inflationRate) ** yearsInflated
+      (bucket.classification === "discretionary" &&
+      age >= plan.personalDetails.retirementAge
+        ? categorySpending *
+          (plan.spending.discretionarySpendingAdjustmentPercent / 100)
+        : categorySpending)
     );
   }, 0);
 }
@@ -296,8 +314,11 @@ function calculatePersonAnnualIncome(
       ? income.employment.currentSalary *
         (1 + income.employment.annualSalaryGrowthRate) ** yearsFromToday
       : 0;
+  const secondEmploymentStartAge = income.secondEmployment.startAtRetirementAge
+    ? plan.personalDetails.retirementAge
+    : income.secondEmployment.startAge;
   const secondSalary =
-    age >= income.secondEmployment.startAge &&
+    age >= secondEmploymentStartAge &&
     age < income.secondEmployment.endAge
       ? income.secondEmployment.currentSalary *
         (1 + income.secondEmployment.annualSalaryGrowthRate) ** yearsFromToday
