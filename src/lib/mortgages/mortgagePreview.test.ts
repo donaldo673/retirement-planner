@@ -18,6 +18,21 @@ test("legacy saved plans receive mortgage and property defaults", () => {
   );
   legacyPlan.taxSettings = { jurisdiction: "england" };
   legacyPlan.withdrawalOrder = legacyWithdrawalOrder;
+  legacyPlan.people.person1.income.secondEmployment = {
+    ...legacyPlan.people.person1.income.secondEmployment,
+  };
+  delete legacyPlan.people.person1.income.secondEmployment.startAtRetirementAge;
+  const [essential, legacyTravel, ...remainingBuckets] =
+    legacyPlan.spending.buckets;
+  legacyPlan.spending.buckets = [
+    essential,
+    { ...legacyTravel },
+    ...remainingBuckets,
+  ];
+  delete legacyPlan.spending.buckets[1].classification;
+  delete legacyPlan.spending.buckets[1].startAge;
+  delete legacyPlan.spending.discretionaryReductionAfterRetirement;
+  delete legacyPlan.spending.discretionarySpendingAdjustmentPercent;
 
   const parsed = savedPlanSchema.parse({
     version: 1,
@@ -29,6 +44,34 @@ test("legacy saved plans receive mortgage and property defaults", () => {
   assert.equal(parsed.plan.mortgageConfiguration.repaymentType, "repayment");
   assert.equal(parsed.plan.propertyInformation.estimatedValue, 300_000);
   assert.equal(parsed.plan.taxSettings.minimumCashReserve, 10_000);
+  assert.equal(
+    parsed.plan.people.person1.income.secondEmployment.startAtRetirementAge,
+    true,
+  );
+  assert.equal(parsed.plan.people.person1.income.secondEmployment.startAge, 45);
+  assert.equal(
+    parsed.plan.spending.buckets[1].classification,
+    "discretionary",
+  );
+  assert.equal(parsed.plan.spending.buckets[1].startAge, 45);
+  assert.equal(parsed.plan.spending.discretionarySpendingAdjustmentPercent, 100);
+  const legacySpendingWithReduction = { ...legacyPlan.spending };
+  delete legacySpendingWithReduction.discretionarySpendingAdjustmentPercent;
+  const legacyAdjustment = savedPlanSchema.parse({
+    version: 1,
+    savedAt: new Date().toISOString(),
+    plan: {
+      ...legacyPlan,
+      spending: {
+        ...legacySpendingWithReduction,
+        discretionaryReductionAfterRetirement: 25,
+      },
+    },
+  });
+  assert.equal(
+    legacyAdjustment.plan.spending.discretionarySpendingAdjustmentPercent,
+    75,
+  );
   assert.deepEqual(
     parsed.plan.taxSettings.withdrawalPriority,
     legacyWithdrawalOrder,

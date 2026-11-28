@@ -60,12 +60,12 @@ export function createSampleRetirementPlan(): RetirementPlan {
           employment: {
             currentSalary: 65_000,
             annualSalaryGrowthRate: 0.03,
-            workUntilAge: 67,
           },
           secondEmployment: {
             currentSalary: 0,
             annualSalaryGrowthRate: 0,
             startAge: 45,
+            startAtRetirementAge: true,
             endAge: 67,
           },
           otherIncome: {
@@ -88,12 +88,12 @@ export function createSampleRetirementPlan(): RetirementPlan {
           employment: {
             currentSalary: 0,
             annualSalaryGrowthRate: 0,
-            workUntilAge: 67,
           },
           secondEmployment: {
             currentSalary: 0,
             annualSalaryGrowthRate: 0,
             startAge: 43,
+            startAtRetirementAge: true,
             endAge: 67,
           },
           otherIncome: {
@@ -115,6 +115,7 @@ export function createSampleRetirementPlan(): RetirementPlan {
         {
           id: "essential",
           name: "Essential spending",
+          classification: "essential",
           annualAmount: 30_000,
           inflationRate: 0.025,
           startAge: 45,
@@ -123,14 +124,16 @@ export function createSampleRetirementPlan(): RetirementPlan {
         {
           id: "travel",
           name: "Travel",
+          classification: "discretionary",
           annualAmount: 6_000,
           inflationRate: 0.025,
-          startAge: 67,
+          startAge: 45,
           endAge: 80,
         },
         {
           id: "vehicle",
           name: "Vehicle costs",
+          classification: "essential",
           annualAmount: 3_500,
           inflationRate: 0.025,
           startAge: 45,
@@ -139,6 +142,7 @@ export function createSampleRetirementPlan(): RetirementPlan {
         {
           id: "property-maintenance",
           name: "Property maintenance",
+          classification: "essential",
           annualAmount: 2_500,
           inflationRate: 0.025,
           startAge: 45,
@@ -147,28 +151,32 @@ export function createSampleRetirementPlan(): RetirementPlan {
         {
           id: "healthcare",
           name: "Healthcare",
+          classification: "essential",
           annualAmount: 2_000,
           inflationRate: 0.025,
-          startAge: 65,
+          startAge: 45,
           endAge: 95,
         },
         {
           id: "lifestyle",
           name: "Lifestyle",
+          classification: "discretionary",
           annualAmount: 8_000,
           inflationRate: 0.025,
-          startAge: 67,
+          startAge: 45,
           endAge: 95,
         },
         {
           id: "other",
           name: "Other",
+          classification: "essential",
           annualAmount: 3_000,
           inflationRate: 0.025,
           startAge: 45,
           endAge: 95,
         },
       ],
+      discretionarySpendingAdjustmentPercent: 100,
     },
     assumptions: {
       isaRealReturn: 0.025,

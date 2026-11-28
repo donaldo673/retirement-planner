@@ -37,7 +37,10 @@ function createTaxInputs(
 function incomeTaxSources(year: ProjectionYear): StatementLineItem[] {
   return [
     { label: "Employment income", amount: year.salaryIncome },
-    { label: "Second employment income", amount: year.secondSalaryIncome },
+    {
+      label: "Second / post retirement employment income",
+      amount: year.secondSalaryIncome,
+    },
     { label: "Rental income", amount: year.rentalIncome },
     { label: "State Pension", amount: year.statePensionIncome },
     { label: "Private pension drawdown", amount: year.pensionDrawdownIncome },

@@ -5,6 +5,7 @@ const moneySchema = z.number().finite().min(0);
 const rateSchema = z.number().finite().min(-1);
 const nonNegativeRateSchema = z.number().finite().min(0).max(1);
 const accountTypes = ["cash", "gia", "isa", "pension"] as const;
+const spendingClassifications = ["essential", "discretionary"] as const;
 const defaultAccumulationPriority = ["pension", "isa", "gia", "cash"] as const;
 const defaultWithdrawalPriority = ["cash", "gia", "isa", "pension"] as const;
 
@@ -101,12 +102,12 @@ const personIncomeSchema = z.object({
   employment: z.object({
     currentSalary: moneySchema,
     annualSalaryGrowthRate: rateSchema,
-    workUntilAge: ageSchema,
   }),
   secondEmployment: z.object({
     currentSalary: moneySchema,
     annualSalaryGrowthRate: rateSchema,
     startAge: ageSchema,
+    startAtRetirementAge: z.boolean(),
     endAge: ageSchema,
   }),
   otherIncome: z.object({
@@ -133,6 +134,7 @@ const personSchema = z.object({
 const spendingBucketSchema = z.object({
   id: z.string().trim().min(1, "Each bucket needs an ID."),
   name: z.string().trim().min(1, "Enter a spending category name."),
+  classification: z.enum(spendingClassifications),
   annualAmount: moneySchema,
   inflationRate: rateSchema,
   startAge: ageSchema,
@@ -167,7 +169,10 @@ const retirementPlanObjectSchema = z
     }),
     mortgageConfiguration: mortgageConfigurationSchema,
     propertyInformation: propertyInformationSchema,
-    spending: z.object({ buckets: z.array(spendingBucketSchema) }),
+    spending: z.object({
+      buckets: z.array(spendingBucketSchema),
+      discretionarySpendingAdjustmentPercent: z.number().finite().min(70).max(130),
+    }),
     assumptions: z.object({
       isaRealReturn: rateSchema,
       pensionRealReturn: rateSchema,
@@ -217,14 +222,6 @@ const retirementPlanObjectSchema = z
     }
 
     for (const [index, person] of people.entries()) {
-      if (person.income.employment.workUntilAge < person.income.currentAge) {
-        context.addIssue({
-          code: "custom",
-          path: ["people", index === 0 ? "person1" : "person2", "income", "employment", "workUntilAge"],
-          message: "Work-until age must be at or after current age.",
-        });
-      }
-
       if (
         person.income.secondEmployment.startAge >
         person.income.secondEmployment.endAge
@@ -238,7 +235,8 @@ const retirementPlanObjectSchema = z
             "secondEmployment",
             "endAge",
           ],
-          message: "Second job end age must be at or after its start age.",
+          message:
+            "Second / post retirement employment end age must be at or after its start age.",
         });
       }
     }
@@ -291,6 +289,95 @@ function addStoredPlanDefaults(value: unknown): unknown {
   }
 
   const plan = value as Record<string, unknown>;
+  const people =
+    typeof plan.people === "object" &&
+    plan.people !== null &&
+    !Array.isArray(plan.people)
+      ? (plan.people as Record<string, unknown>)
+      : {};
+  const spending =
+    typeof plan.spending === "object" &&
+    plan.spending !== null &&
+    !Array.isArray(plan.spending)
+      ? (plan.spending as Record<string, unknown>)
+      : {};
+  const legacyDiscretionaryReduction =
+    spending.discretionaryReductionAfterRetirement;
+  const migratedSpendingAdjustment =
+    typeof legacyDiscretionaryReduction === "number" &&
+    Number.isFinite(legacyDiscretionaryReduction)
+      ? Math.max(70, Math.min(130, 100 - legacyDiscretionaryReduction))
+      : 100;
+  const personPlans = ["person1", "person2"].map((key) => {
+    const person =
+      typeof people[key] === "object" &&
+      people[key] !== null &&
+      !Array.isArray(people[key])
+        ? (people[key] as Record<string, unknown>)
+        : {};
+    const income =
+      typeof person.income === "object" &&
+      person.income !== null &&
+      !Array.isArray(person.income)
+        ? (person.income as Record<string, unknown>)
+        : {};
+    const secondEmployment =
+      typeof income.secondEmployment === "object" &&
+      income.secondEmployment !== null &&
+      !Array.isArray(income.secondEmployment)
+        ? (income.secondEmployment as Record<string, unknown>)
+        : {};
+    const currentAge =
+      typeof income.currentAge === "number" ? income.currentAge : 0;
+    return {
+      ...person,
+      income: {
+        ...income,
+        secondEmployment: {
+          ...secondEmployment,
+          startAge: secondEmployment.startAge ?? currentAge,
+          startAtRetirementAge: secondEmployment.startAtRetirementAge ?? true,
+        },
+      },
+    };
+  });
+  const buckets = Array.isArray(spending.buckets)
+    ? spending.buckets.map((value) => {
+        if (
+          typeof value !== "object" ||
+          value === null ||
+          Array.isArray(value)
+        ) {
+          return value;
+        }
+        const bucket = value as Record<string, unknown>;
+        const name =
+          typeof bucket.name === "string" ? bucket.name.toLowerCase() : "";
+        const defaultClassification =
+          ["travel", "lifestyle", "holiday", "discretionary"].some((word) =>
+            name.includes(word),
+          )
+            ? "discretionary"
+            : "essential";
+        const currentAge =
+          typeof plan.people === "object" &&
+          plan.people !== null &&
+          !Array.isArray(plan.people) &&
+          typeof (plan.people as Record<string, unknown>).person1 === "object" &&
+          (plan.people as Record<string, unknown>).person1 !== null
+            ? ((plan.people as Record<string, unknown>).person1 as {
+                income?: { currentAge?: unknown };
+              }).income?.currentAge
+            : undefined;
+        return {
+          ...bucket,
+          classification: bucket.classification ?? defaultClassification,
+          startAge:
+            bucket.startAge ??
+            (typeof currentAge === "number" ? currentAge : 0),
+        };
+      })
+    : [];
   const taxSettings =
     typeof plan.taxSettings === "object" &&
     plan.taxSettings !== null &&
@@ -299,6 +386,18 @@ function addStoredPlanDefaults(value: unknown): unknown {
       : {};
   return {
     ...plan,
+    people: {
+      ...people,
+      person1: personPlans[0],
+      person2: personPlans[1],
+    },
+    spending: {
+      ...spending,
+      buckets,
+      discretionarySpendingAdjustmentPercent:
+        spending.discretionarySpendingAdjustmentPercent ??
+        migratedSpendingAdjustment,
+    },
     mortgageConfiguration:
       plan.mortgageConfiguration ?? defaultMortgageConfiguration,
     propertyInformation:

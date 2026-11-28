@@ -215,6 +215,14 @@ export function RetirementPlanForm({
   const [selectedPerson, setSelectedPerson] = useState<PersonKey>("person1");
   const activePerson =
     householdType === "joint" ? selectedPerson : "person1";
+  const activePersonCurrentAge = useWatch({
+    control,
+    name: `people.${activePerson}.income.currentAge`,
+  });
+  const startAtRetirementAge = useWatch({
+    control,
+    name: `people.${activePerson}.income.secondEmployment.startAtRetirementAge`,
+  });
   const activeStatePensionAge = useWatch({
     control,
     name: `people.${activePerson}.income.statePensionAge`,
@@ -524,17 +532,6 @@ export function RetirementPlanForm({
                   label="Annual salary growth"
                   name={`people.${activePerson}.income.employment.annualSalaryGrowthRate`}
                 />
-                <NumberField
-                  error={
-                    personIncomeErrors?.employment?.workUntilAge?.message
-                  }
-                  label="Work until age"
-                  max={120}
-                  min={0}
-                  name={`people.${activePerson}.income.employment.workUntilAge`}
-                  step={1}
-                  suffix="years"
-                />
               </div>
             </section>
             <section aria-labelledby={`${activePerson}-second-employment`}>
@@ -542,8 +539,18 @@ export function RetirementPlanForm({
                 className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100"
                 id={`${activePerson}-second-employment`}
               >
-                Second employment
+                Second / Post Retirement Employment
               </h3>
+              <label className="mb-4 flex min-h-11 items-center gap-3 text-sm font-medium text-slate-700 dark:text-slate-200">
+                <input
+                  className="size-4 accent-teal-700"
+                  type="checkbox"
+                  {...register(
+                    `people.${activePerson}.income.secondEmployment.startAtRetirementAge`,
+                  )}
+                />
+                <span>Start at Retirement Age</span>
+              </label>
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <NumberField
                   error={
@@ -558,17 +565,19 @@ export function RetirementPlanForm({
                   label="Annual salary growth"
                   name={`people.${activePerson}.income.secondEmployment.annualSalaryGrowthRate`}
                 />
-                <NumberField
-                  error={
-                    personIncomeErrors?.secondEmployment?.startAge?.message
-                  }
-                  label="Start age"
-                  max={120}
-                  min={0}
-                  name={`people.${activePerson}.income.secondEmployment.startAge`}
-                  step={1}
-                  suffix="years"
-                />
+                {!startAtRetirementAge ? (
+                  <NumberField
+                    error={
+                      personIncomeErrors?.secondEmployment?.startAge?.message
+                    }
+                    label="Start age"
+                    max={120}
+                    min={activePersonCurrentAge}
+                    name={`people.${activePerson}.income.secondEmployment.startAge`}
+                    step={1}
+                    suffix="years"
+                  />
+                ) : null}
                 <NumberField
                   error={
                     personIncomeErrors?.secondEmployment?.endAge?.message
@@ -709,11 +718,21 @@ export function RetirementPlanForm({
                     label="Inflation rate"
                     name={`${bucketPath}.inflationRate`}
                   />
+                  <label className="block">
+                    <span className="form-label">Spending type</span>
+                    <select
+                      className="form-control"
+                      {...register(`${bucketPath}.classification` as const)}
+                    >
+                      <option value="essential">Essential</option>
+                      <option value="discretionary">Discretionary</option>
+                    </select>
+                  </label>
                   <NumberField
                     error={bucketErrors?.startAge?.message}
                     label="Start age"
                     max={120}
-                    min={0}
+                    min={currentAge}
                     name={`${bucketPath}.startAge`}
                     step={1}
                     suffix="years"
@@ -739,7 +758,8 @@ export function RetirementPlanForm({
                 name: "New spending category",
                 annualAmount: 0,
                 inflationRate: 0.025,
-                startAge: 67,
+                classification: "essential",
+                startAge: currentAge,
                 endAge: 95,
               })
             }

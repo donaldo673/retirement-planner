@@ -89,19 +89,30 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
 
   assertAge("Retirement age", personalDetails.retirementAge);
   assertAge("Life expectancy", personalDetails.lifeExpectancy);
+  assertFiniteNonNegative(
+    "Post-retirement discretionary spending adjustment",
+    spending.discretionarySpendingAdjustmentPercent,
+  );
+  if (
+    spending.discretionarySpendingAdjustmentPercent < 70 ||
+    spending.discretionarySpendingAdjustmentPercent > 130
+  ) {
+    throw new RangeError(
+      "Post-retirement discretionary spending adjustment must be between 70% and 130%.",
+    );
+  }
   assertAge("Mortgage end age", assets.mortgage.mortgageEndAge);
   for (const personKey of ["person1", "person2"] as const) {
     const person = people[personKey];
     const { income: personIncome, assets: personAssets } = person;
     assertAge(`${personKey} current age`, personIncome.currentAge);
     assertAge(`${personKey} State Pension age`, personIncome.statePensionAge);
-    assertAge(`${personKey} work-until age`, personIncome.employment.workUntilAge);
     assertAge(
-      `${personKey} second employment start age`,
+      `${personKey} second / post retirement employment start age`,
       personIncome.secondEmployment.startAge,
     );
     assertAge(
-      `${personKey} second employment end age`,
+      `${personKey} second / post retirement employment end age`,
       personIncome.secondEmployment.endAge,
     );
     assertFiniteNonNegative(`${personKey} ISA value`, personAssets.isa.currentValue);
@@ -122,7 +133,7 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
       personIncome.employment.currentSalary,
     );
     assertFiniteNonNegative(
-      `${personKey} second employment salary`,
+      `${personKey} second / post retirement employment salary`,
       personIncome.secondEmployment.currentSalary,
     );
     assertFiniteNonNegative(
@@ -142,7 +153,7 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
       personIncome.employment.annualSalaryGrowthRate,
     );
     assertAnnualRate(
-      `${personKey} second employment salary growth rate`,
+      `${personKey} second / post retirement employment salary growth rate`,
       personIncome.secondEmployment.annualSalaryGrowthRate,
     );
     if (
@@ -150,7 +161,7 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
       personIncome.secondEmployment.endAge
     ) {
       throw new RangeError(
-        `${personKey} second employment start age must not exceed its end age.`,
+        `${personKey} second / post retirement employment start age must not exceed its end age.`,
       );
     }
   }
@@ -171,14 +182,6 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
   ) {
     throw new RangeError(
       "A valid plan requires current age < retirement age < life expectancy.",
-    );
-  }
-
-  if (
-    people.person1.income.employment.workUntilAge > personalDetails.lifeExpectancy
-  ) {
-    throw new RangeError(
-      "Person 1 work-until age must not exceed life expectancy.",
     );
   }
 
@@ -284,9 +287,15 @@ function calculateSpending(plan: RetirementPlan, age: number): number {
     }
 
     const yearsInflated = age - bucket.startAge;
+    const categorySpending =
+      bucket.annualAmount * (1 + bucket.inflationRate) ** yearsInflated;
     return (
       total +
-      bucket.annualAmount * (1 + bucket.inflationRate) ** yearsInflated
+      (bucket.classification === "discretionary" &&
+      age >= plan.personalDetails.retirementAge
+        ? categorySpending *
+          (plan.spending.discretionarySpendingAdjustmentPercent / 100)
+        : categorySpending)
     );
   }, 0);
 }
@@ -301,12 +310,15 @@ function calculatePersonAnnualIncome(
   const inflationFactor =
     (1 + plan.assumptions.inflationRate) ** yearsFromToday;
   const salary =
-    age < income.employment.workUntilAge
+    age < plan.personalDetails.retirementAge
       ? income.employment.currentSalary *
         (1 + income.employment.annualSalaryGrowthRate) ** yearsFromToday
       : 0;
+  const secondEmploymentStartAge = income.secondEmployment.startAtRetirementAge
+    ? plan.personalDetails.retirementAge
+    : income.secondEmployment.startAge;
   const secondSalary =
-    age >= income.secondEmployment.startAge &&
+    age >= secondEmploymentStartAge &&
     age < income.secondEmployment.endAge
       ? income.secondEmployment.currentSalary *
         (1 + income.secondEmployment.annualSalaryGrowthRate) ** yearsFromToday

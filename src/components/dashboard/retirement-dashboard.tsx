@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { DashboardSummary } from "@/components/dashboard/DashboardSummary";
@@ -81,7 +82,12 @@ export function RetirementDashboard() {
     });
   const [activePage, setActivePage] = useState<AppPage>("plan");
   const [exploreTab, setExploreTab] = useState<ExploreTab>("wealth");
+  const [scenarioRetirementAge, setScenarioRetirementAge] = useState<number | null>(
+    null,
+  );
   const watchedPlan = useWatch({ control: form.control });
+  const discretionarySpendingAdjustmentPercent =
+    watchedPlan.spending?.discretionarySpendingAdjustmentPercent ?? 100;
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -192,6 +198,37 @@ export function RetirementDashboard() {
     () => (parsedPlan.success ? calculateProjection(parsedPlan.data) : null),
     [parsedPlan],
   );
+  const retirementAge = form.getValues("personalDetails.retirementAge");
+  const currentAge = form.getValues("people.person1.income.currentAge");
+  const lifeExpectancy = form.getValues("personalDetails.lifeExpectancy");
+  const effectiveRetirementAge =
+    scenarioRetirementAge === null
+      ? retirementAge
+      : Math.max(
+          currentAge + 1,
+          Math.min(scenarioRetirementAge, lifeExpectancy - 1),
+        );
+  const effectivePlan = useMemo(() => {
+    if (!parsedPlan.success) {
+      return null;
+    }
+
+    return {
+      ...parsedPlan.data,
+      personalDetails: {
+        ...parsedPlan.data.personalDetails,
+        retirementAge: effectiveRetirementAge,
+      },
+    };
+  }, [effectiveRetirementAge, parsedPlan]);
+  const exploreProjection = useMemo(() => {
+    if (!effectivePlan) {
+      return null;
+    }
+    return scenarioRetirementAge === null
+      ? projection
+      : calculateProjection(effectivePlan);
+  }, [effectivePlan, projection, scenarioRetirementAge]);
   const planningAnalysis = useMemo(() => {
     if (!projection || !parsedPlan.success) {
       return null;
@@ -199,11 +236,17 @@ export function RetirementDashboard() {
 
     return analyzePlanning({ plan: parsedPlan.data, projection });
   }, [parsedPlan, projection]);
+  const exploreAnalysis = useMemo(() => {
+    if (!effectivePlan || !exploreProjection) {
+      return null;
+    }
+    return analyzePlanning({
+      plan: effectivePlan,
+      projection: exploreProjection,
+    });
+  }, [effectivePlan, exploreProjection]);
   const summary = projection?.summary;
   const firstProjectionYear = projection?.yearlyResults[1];
-  const currentAge = form.getValues("people.person1.income.currentAge");
-  const retirementAge = form.getValues("personalDetails.retirementAge");
-  const lifeExpectancy = form.getValues("personalDetails.lifeExpectancy");
 
   function resetPlan() {
     if (
@@ -216,6 +259,7 @@ export function RetirementDashboard() {
     }
 
     form.reset(createSampleRetirementPlan());
+    setScenarioRetirementAge(null);
     setHasSavedPlan(false);
     setCanContinueSavedPlan(false);
     setCanSavePlan(true);
@@ -228,6 +272,7 @@ export function RetirementDashboard() {
 
   function loadPlan(plan: RetirementPlan) {
     reset(plan);
+    setScenarioRetirementAge(null);
     setHasSavedPlan(true);
     setCanContinueSavedPlan(true);
     setCanSavePlan(true);
@@ -250,16 +295,26 @@ export function RetirementDashboard() {
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
         <div className="mx-auto flex min-h-16 max-w-[1440px] flex-wrap items-center justify-between gap-2 px-3 py-2 sm:flex-nowrap sm:gap-4 sm:px-6 sm:py-0 lg:px-8">
           <a
-            aria-label="FP Futureplan"
-            className="flex shrink-0 items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-600"
+            aria-label="Pendulum Retirement Plan"
+            className="flex shrink-0 items-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-600"
             href="#main-content"
           >
-            <span className="grid size-9 place-items-center rounded-lg bg-slate-900 text-xs font-bold text-white dark:bg-teal-400 dark:text-slate-950">
-              FP
-            </span>
-            <span className="hidden text-sm font-semibold text-slate-950 sm:inline dark:text-white">
-              Futureplan
-            </span>
+            <Image
+              alt="Pendulum Retirement Plan"
+              className="h-11 w-auto dark:hidden"
+              height={64}
+              priority
+              src="/assets/brand/pendulum-horizontal-light.svg"
+              width={300}
+            />
+            <Image
+              alt="Pendulum Retirement Plan"
+              className="hidden h-11 w-auto dark:block"
+              height={64}
+              priority
+              src="/assets/brand/pendulum-horizontal-dark.svg"
+              width={300}
+            />
           </a>
           <nav
             aria-label="Main navigation"
@@ -457,6 +512,123 @@ export function RetirementDashboard() {
                   <h2 className="sr-only" id="explore-heading">
                     Explore projection details
                   </h2>
+                  <section
+                    aria-labelledby="retirement-age-scenario-heading"
+                    className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3
+                          className="text-base font-semibold text-slate-950 dark:text-white"
+                          id="retirement-age-scenario-heading"
+                        >
+                          Explore a retirement age
+                        </h3>
+                        <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                          Adjust this scenario to see its effect on your projection.
+                          Your saved plan stays at age {retirementAge}.
+                        </p>
+                      </div>
+                      {scenarioRetirementAge !== null ? (
+                        <button
+                          className="min-h-9 rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 dark:border-slate-700 dark:text-slate-200"
+                          onClick={() => setScenarioRetirementAge(null)}
+                          type="button"
+                        >
+                          Reset to plan age
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="mt-4">
+                      <label
+                        className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-800 dark:text-slate-100"
+                        htmlFor="scenario-retirement-age"
+                      >
+                        <span>Scenario retirement age</span>
+                        <output
+                          aria-live="polite"
+                          htmlFor="scenario-retirement-age"
+                        >
+                          {effectiveRetirementAge}
+                        </output>
+                      </label>
+                      <input
+                        className="mt-3 min-h-8 w-full accent-teal-700"
+                        id="scenario-retirement-age"
+                        max={lifeExpectancy - 1}
+                        min={currentAge + 1}
+                        onChange={(event) =>
+                          setScenarioRetirementAge(Number(event.target.value))
+                        }
+                        step={1}
+                        type="range"
+                        value={effectiveRetirementAge}
+                      />
+                      <div
+                        aria-hidden="true"
+                        className="flex justify-between text-xs text-slate-500 dark:text-slate-400"
+                      >
+                        <span>{currentAge + 1}</span>
+                        <span>{lifeExpectancy - 1}</span>
+                      </div>
+                    </div>
+                  </section>
+                  <section
+                    aria-labelledby="discretionary-adjustment-heading"
+                    className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900"
+                  >
+                    <div>
+                      <h3
+                        className="text-base font-semibold text-slate-950 dark:text-white"
+                        id="discretionary-adjustment-heading"
+                      >
+                        Adjust discretionary spending after retirement
+                      </h3>
+                      <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                        Set discretionary categories to 70%–130% of their
+                        planned amount from retirement age. Essential spending
+                        is unchanged. This setting is saved with your plan.
+                      </p>
+                    </div>
+                    <div className="mt-4">
+                      <label
+                        className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-800 dark:text-slate-100"
+                        htmlFor="discretionary-spending-adjustment"
+                      >
+                        <span>Spending adjustment</span>
+                        <output
+                          aria-live="polite"
+                          htmlFor="discretionary-spending-adjustment"
+                        >
+                          {discretionarySpendingAdjustmentPercent}%
+                        </output>
+                      </label>
+                      <input
+                        className="mt-3 min-h-8 w-full accent-teal-700"
+                        id="discretionary-spending-adjustment"
+                        max={130}
+                        min={70}
+                        onChange={(event) => {
+                          form.setValue(
+                            "spending.discretionarySpendingAdjustmentPercent",
+                            Number(event.target.value),
+                            { shouldDirty: true, shouldValidate: true },
+                          );
+                          setCanSavePlan(true);
+                        }}
+                        step={1}
+                        type="range"
+                        value={discretionarySpendingAdjustmentPercent}
+                      />
+                      <div
+                        aria-hidden="true"
+                        className="flex justify-between text-xs text-slate-500 dark:text-slate-400"
+                      >
+                        <span>70%</span>
+                        <span>130%</span>
+                      </div>
+                    </div>
+                  </section>
                   <div
                     aria-label="Projection detail categories"
                     className="mb-5 flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800"
@@ -485,30 +657,32 @@ export function RetirementDashboard() {
                       </button>
                     ))}
                   </div>
-                  {activePage === "explore" && (
+                  {activePage === "explore" &&
+                    exploreProjection &&
+                    exploreAnalysis && (
                     <ChartDashboard
                       currentAge={currentAge}
                       exploreTab={exploreTab}
                       lifeExpectancy={lifeExpectancy}
                       mode="explore"
-                      retirementAge={retirementAge}
+                      retirementAge={effectiveRetirementAge}
                       scenarioSeries={scenarioSeries}
-                      summary={summary}
-                      yearlyResults={projection.yearlyResults}
+                      summary={exploreProjection.summary}
+                      yearlyResults={exploreProjection.yearlyResults}
                     />
                   )}
-                  {exploreTab === "independence" && (
-                    <PlanningMetrics metrics={planningAnalysis.metrics} />
+                  {exploreTab === "independence" && exploreAnalysis && (
+                    <PlanningMetrics metrics={exploreAnalysis.metrics} />
                   )}
-                  {exploreTab === "risks" && (
+                  {exploreTab === "risks" && exploreAnalysis && (
                     <div className="mt-6 space-y-5">
-                      <InsightsPanel insights={planningAnalysis.insights} />
+                      <InsightsPanel insights={exploreAnalysis.insights} />
                       <details className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
                         <summary className="min-h-8 cursor-pointer font-semibold text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 dark:text-slate-100">
                           Explore modelled alternatives
                         </summary>
                         <PotentialImprovements
-                          opportunities={planningAnalysis.opportunities}
+                          opportunities={exploreAnalysis.opportunities}
                         />
                       </details>
                       <section
