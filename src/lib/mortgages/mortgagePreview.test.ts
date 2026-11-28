@@ -115,8 +115,7 @@ test("illustrative payoff estimate includes overpayments and excludes interest-o
     currentFixedRate: 0.03,
     fixedMonthsRemaining: 0,
     assumeRemortgage: false,
-    monthlyOverpayment: 250,
-    annualLumpSumOverpayment: 0,
+    annualMortgageOverpaymentTarget: 3_000,
     repaymentType: "repayment" as const,
   };
   const payoffWithoutOverpayments = estimateMortgagePayoffAge(

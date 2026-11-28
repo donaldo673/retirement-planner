@@ -347,7 +347,7 @@ export function RetirementPlanForm({
                           error={
                             personAssetErrors?.isa?.monthlyContribution?.message
                           }
-                          label="ISA monthly contribution"
+                          label="Target ISA Contribution (£/month)"
                           name={`people.${personKey}.assets.isa.monthlyContribution`}
                           prefix="£"
                           suffix="/ month"

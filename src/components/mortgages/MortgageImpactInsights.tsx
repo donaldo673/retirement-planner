@@ -23,8 +23,7 @@ export function MortgageImpactInsights({
   estimatedPayoffAgeWithOverpayments,
 }: MortgageImpactInsightsProps) {
   const overpaymentsConfigured =
-    configuration.monthlyOverpayment > 0 ||
-    configuration.annualLumpSumOverpayment > 0;
+    configuration.annualMortgageOverpaymentTarget > 0;
   const estimatedYearsSaved =
     estimatedPayoffAge !== null &&
     estimatedPayoffAgeWithOverpayments !== null

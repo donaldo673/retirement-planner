@@ -19,8 +19,8 @@ const defaultMortgageConfiguration = {
   baseRate: 0.0475,
   margin: 0.005,
   futureMortgageRate: 0.0575,
-  monthlyOverpayment: 0,
-  annualLumpSumOverpayment: 0,
+  annualMortgageOverpaymentTarget: 0,
+  endOfTermTreatment: "rollover" as const,
   repaymentType: "repayment" as const,
   repaymentStrategy: "sale-of-property" as const,
   rentalIncome: 0,
@@ -53,8 +53,8 @@ const mortgageConfigurationSchema = z
     baseRate: nonNegativeRateSchema,
     margin: nonNegativeRateSchema,
     futureMortgageRate: nonNegativeRateSchema,
-    monthlyOverpayment: moneySchema,
-    annualLumpSumOverpayment: moneySchema,
+    annualMortgageOverpaymentTarget: moneySchema,
+    endOfTermTreatment: z.enum(["rollover", "repay-from-gia"]),
     repaymentType: z.enum(["repayment", "interest-only"]),
     repaymentStrategy: z.enum([
       "sale-of-property",
@@ -301,6 +301,24 @@ function addStoredPlanDefaults(value: unknown): unknown {
     !Array.isArray(plan.spending)
       ? (plan.spending as Record<string, unknown>)
       : {};
+  const mortgageConfiguration =
+    typeof plan.mortgageConfiguration === "object" &&
+    plan.mortgageConfiguration !== null &&
+    !Array.isArray(plan.mortgageConfiguration)
+      ? (plan.mortgageConfiguration as Record<string, unknown>)
+      : {};
+  const legacyMonthlyOverpayment = mortgageConfiguration.monthlyOverpayment;
+  const legacyAnnualOverpayment =
+    mortgageConfiguration.annualLumpSumOverpayment;
+  const legacyOverpaymentTarget =
+    (typeof legacyMonthlyOverpayment === "number" &&
+    Number.isFinite(legacyMonthlyOverpayment)
+      ? legacyMonthlyOverpayment * 12
+      : 0) +
+    (typeof legacyAnnualOverpayment === "number" &&
+    Number.isFinite(legacyAnnualOverpayment)
+      ? legacyAnnualOverpayment
+      : 0);
   const legacyDiscretionaryReduction =
     spending.discretionaryReductionAfterRetirement;
   const migratedSpendingAdjustment =
@@ -398,8 +416,15 @@ function addStoredPlanDefaults(value: unknown): unknown {
         spending.discretionarySpendingAdjustmentPercent ??
         migratedSpendingAdjustment,
     },
-    mortgageConfiguration:
-      plan.mortgageConfiguration ?? defaultMortgageConfiguration,
+    mortgageConfiguration: {
+      ...defaultMortgageConfiguration,
+      ...mortgageConfiguration,
+      annualMortgageOverpaymentTarget:
+        mortgageConfiguration.annualMortgageOverpaymentTarget ??
+        legacyOverpaymentTarget,
+      endOfTermTreatment:
+        mortgageConfiguration.endOfTermTreatment ?? "rollover",
+    },
     propertyInformation:
       plan.propertyInformation ?? defaultPropertyInformation,
     taxSettings: {

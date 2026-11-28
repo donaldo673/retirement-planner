@@ -19,6 +19,7 @@ import {
   calculateUkTax,
   CURRENT_UK_TAX_YEAR,
 } from "./uk-tax";
+import { getAssumedFutureMortgageRate } from "../mortgages/mortgagePreview";
 
 const MONTHS_PER_YEAR = 12;
 const MONEY_EPSILON = 0.000001;
@@ -375,36 +376,19 @@ function calculateMortgageYear(
     return { balance: 0, payment: 0 };
   }
 
-  if (periodStartAge >= mortgage.mortgageEndAge) {
-    return { balance: 0, payment: mortgageBalance };
-  }
-
   let balance = mortgageBalance;
   let payment = 0;
-  const monthlyRate = mortgage.interestRate / MONTHS_PER_YEAR;
+  const annualRate =
+    periodStartAge >= mortgage.mortgageEndAge
+      ? getAssumedFutureMortgageRate(mortgage, plan.mortgageConfiguration)
+      : mortgage.interestRate;
+  const monthlyRate = annualRate / MONTHS_PER_YEAR;
 
   for (let month = 0; month < MONTHS_PER_YEAR && balance > MONEY_EPSILON; month += 1) {
     balance += balance * monthlyRate;
-    if (month === 0) {
-      const lumpSumOverpayment = Math.min(
-        balance,
-        plan.mortgageConfiguration.annualLumpSumOverpayment,
-      );
-      balance -= lumpSumOverpayment;
-      payment += lumpSumOverpayment;
-    }
-    const monthlyPayment = Math.min(
-      balance,
-      mortgage.monthlyPayment +
-        plan.mortgageConfiguration.monthlyOverpayment,
-    );
+    const monthlyPayment = Math.min(balance, mortgage.monthlyPayment);
     balance -= monthlyPayment;
     payment += monthlyPayment;
-  }
-
-  if (periodStartAge + 1 >= mortgage.mortgageEndAge && balance > MONEY_EPSILON) {
-    payment += balance;
-    balance = 0;
   }
 
   return {
@@ -550,7 +534,10 @@ function createSnapshot(
     },
     spending: 0,
     mortgagePayment: 0,
+    mortgageOverpayment: 0,
+    mortgageGIARepayment: 0,
     mortgageBalance,
+    targetIsaContribution: 0,
     contributions: createZeroContributions(),
     withdrawals: createZeroWithdrawals(),
     unfundedShortfall: 0,
@@ -662,12 +649,17 @@ function addContributions(
   availableCashflow: number,
   annualIncome: Record<PersonKey, AnnualIncome>,
   investmentIncome: InvestmentIncome,
+  initialRealizedCapitalGains: number,
+  mortgageBalance: number,
 ): {
   balances: AccountBalances;
   contributions: ContributionBreakdown;
+  withdrawals: WithdrawalBreakdown;
+  realizedCapitalGains: number;
   tax: TaxResult;
   personTaxes: Record<PersonKey, TaxResult>;
   cashNetContribution: number;
+  mortgageOverpayment: number;
 } {
   const isWorking = {
     person1:
@@ -679,7 +671,9 @@ function addContributions(
         annualIncome.person2.secondSalary > 0),
   };
   const contributions = createZeroContributions();
+  const withdrawals = createZeroWithdrawals();
   const updatedBalances = cloneAccountBalances(balances);
+  let realizedCapitalGains = initialRealizedCapitalGains;
   const currentPensionContributions = () => ({
     person1: contributions.byPerson.person1.pensionContribution,
     person2: contributions.byPerson.person2.pensionContribution,
@@ -691,19 +685,22 @@ function addContributions(
       annualIncome,
       investmentIncome,
       createZeroWithdrawals(),
-      0,
+      realizedCapitalGains,
       currentPensionContributions(),
     );
   let remainingCashflow = Math.max(0, availableCashflow);
   let personTaxes = calculateContributionTaxes();
   let tax = combineTaxes(personTaxes);
-  if ((!isWorking.person1 && !isWorking.person2) || remainingCashflow <= 0) {
+  if (remainingCashflow <= 0) {
     return {
       balances: updatedBalances,
       contributions,
+      withdrawals,
+      realizedCapitalGains,
       tax,
       personTaxes,
       cashNetContribution: remainingCashflow,
+      mortgageOverpayment: 0,
     };
   }
 
@@ -712,24 +709,24 @@ function addContributions(
     { isa: number; pension: number }
   > = {
     person1: {
-      isa: isWorking.person1
-        ? plan.people.person1.assets.isa.monthlyContribution * MONTHS_PER_YEAR
-        : 0,
+      isa:
+        plan.people.person1.assets.isa.monthlyContribution * MONTHS_PER_YEAR,
       pension: isWorking.person1
         ? plan.people.person1.assets.pension.monthlyContribution * MONTHS_PER_YEAR
         : 0,
     },
     person2: {
-      isa: isWorking.person2
-        ? plan.people.person2.assets.isa.monthlyContribution * MONTHS_PER_YEAR
-        : 0,
+      isa:
+        plan.people.person2.assets.isa.monthlyContribution * MONTHS_PER_YEAR,
       pension: isWorking.person2
         ? plan.people.person2.assets.pension.monthlyContribution * MONTHS_PER_YEAR
         : 0,
     },
   };
-  const scheduledGiaContribution =
-    plan.assets.gia.monthlyContribution * MONTHS_PER_YEAR;
+  const isHouseholdWorking = isWorking.person1 || isWorking.person2;
+  const scheduledGiaContribution = isHouseholdWorking
+    ? plan.assets.gia.monthlyContribution * MONTHS_PER_YEAR
+    : 0;
   const people: PersonKey[] =
     plan.personalDetails.householdType === "joint"
       ? ["person1", "person2"]
@@ -836,28 +833,116 @@ function addContributions(
     return amount;
   };
 
+  const addGiaFundedIsaTarget = (
+    personKey: PersonKey,
+    requestedAmount: number,
+  ): number => {
+    let contributed = addContribution("isa", personKey, requestedAmount);
+    const remainingTarget = requestedAmount - contributed;
+    const availableGia = updatedBalances.gia;
+    const remainingAllowance = Math.max(
+      0,
+      ANNUAL_ISA_ALLOWANCE -
+        contributions.byPerson[personKey].isaContribution,
+    );
+    const maximumAmount = Math.min(
+      remainingTarget,
+      availableGia,
+      remainingAllowance,
+    );
+    if (maximumAmount <= MONEY_EPSILON) {
+      return contributed;
+    }
+
+    const gainForSale = (amount: number) => {
+      const costBasisSold =
+        availableGia > MONEY_EPSILON
+          ? updatedBalances.giaCostBasis * (amount / availableGia)
+          : 0;
+      return Math.max(0, amount - costBasisSold);
+    };
+    const additionalTaxFor = (amount: number) => {
+      const gain = gainForSale(amount);
+      realizedCapitalGains += gain;
+      const taxAfterSale = combineTaxes(calculateContributionTaxes());
+      realizedCapitalGains -= gain;
+      return Math.max(0, taxAfterSale.totalTax - tax.totalTax);
+    };
+    let giaFundedAmount = maximumAmount;
+    if (additionalTaxFor(giaFundedAmount) > remainingCashflow) {
+      let low = 0;
+      let high = giaFundedAmount;
+      for (let iteration = 0; iteration < 48; iteration += 1) {
+        const midpoint = (low + high) / 2;
+        if (additionalTaxFor(midpoint) <= remainingCashflow) {
+          low = midpoint;
+        } else {
+          high = midpoint;
+        }
+      }
+      giaFundedAmount = low;
+    }
+    if (giaFundedAmount <= MONEY_EPSILON) {
+      return contributed;
+    }
+
+    const previousTax = tax;
+    const costBasisSold =
+      updatedBalances.giaCostBasis * (giaFundedAmount / availableGia);
+    const realizedGain = gainForSale(giaFundedAmount);
+    updatedBalances.gia -= giaFundedAmount;
+    updatedBalances.giaCostBasis = Math.max(
+      0,
+      updatedBalances.giaCostBasis - costBasisSold,
+    );
+    updatedBalances.isa[personKey] += giaFundedAmount;
+    withdrawals.giaWithdrawal += giaFundedAmount;
+    contributions.byPerson[personKey].isaContribution += giaFundedAmount;
+    contributions.isaContribution += giaFundedAmount;
+    realizedCapitalGains += realizedGain;
+    personTaxes = calculateContributionTaxes();
+    tax = combineTaxes(personTaxes);
+    remainingCashflow = Math.max(
+      0,
+      remainingCashflow - Math.max(0, tax.totalTax - previousTax.totalTax),
+    );
+    contributed += giaFundedAmount;
+    return contributed;
+  };
+
   const scheduledAmount = (
     account: "isa" | "pension",
     personKey: PersonKey,
   ) => scheduledByPerson[personKey][account];
-  for (const account of plan.taxSettings.accumulationPriority) {
-    if (account === "cash") {
-      continue;
-    }
-    if (account === "gia") {
-      addContribution("gia", null, scheduledGiaContribution);
-      continue;
-    }
+  for (const personKey of people) {
+    addGiaFundedIsaTarget(
+      personKey,
+      scheduledAmount("isa", personKey),
+    );
+  }
+
+  const mortgageOverpayment = Math.min(
+    Math.max(0, mortgageBalance),
+    plan.mortgageConfiguration.annualMortgageOverpaymentTarget,
+    remainingCashflow,
+  );
+  remainingCashflow -= mortgageOverpayment;
+
+  if (plan.taxSettings.accumulationPriority.includes("pension")) {
     for (const personKey of people) {
       addContribution(
-        account,
+        "pension",
         personKey,
-        scheduledAmount(account, personKey),
+        scheduledAmount("pension", personKey),
       );
     }
   }
 
-  if (plan.taxSettings.optimiseTaxAutomatically) {
+  if (plan.taxSettings.accumulationPriority.includes("gia")) {
+    addContribution("gia", null, scheduledGiaContribution);
+  }
+
+  if (isHouseholdWorking && plan.taxSettings.optimiseTaxAutomatically) {
     for (const account of plan.taxSettings.accumulationPriority) {
       if (remainingCashflow <= MONEY_EPSILON || account === "cash") {
         break;
@@ -891,9 +976,12 @@ function addContributions(
   return {
     balances: updatedBalances,
     contributions,
+    withdrawals,
+    realizedCapitalGains,
     tax,
     personTaxes,
     cashNetContribution: reserveTopUp + remainingCashflow,
+    mortgageOverpayment,
   };
 }
 
@@ -902,7 +990,6 @@ function withdrawFromSource(
   requestedAmount: number,
   balances: AccountBalances,
   withdrawals: WithdrawalBreakdown,
-  minimumCashReserve: number,
 ): { remaining: number; realizedCapitalGain: number } {
   if (source === "isa" || source === "pension") {
     const account = balances[source];
@@ -926,10 +1013,7 @@ function withdrawFromSource(
     };
   }
 
-  const available =
-    source === "cash"
-      ? Math.max(0, balances.cash - minimumCashReserve)
-      : balances.gia;
+  const available = source === "cash" ? balances.cash : balances.gia;
   const amount = Math.min(available, requestedAmount);
   if (source === "cash") {
     balances.cash = Math.max(0, balances.cash - amount);
@@ -1061,6 +1145,10 @@ function cloneAccountBalances(balances: AccountBalances): AccountBalances {
 }
 
 function getWithdrawalOrders(priority: AccountType[]): AccountType[][] {
+  const cashFirstPriority: AccountType[] = [
+    "cash",
+    ...priority.filter((account) => account !== "cash"),
+  ];
   const orders: AccountType[][] = [];
   const permute = (remaining: AccountType[], current: AccountType[]) => {
     if (remaining.length === 0) {
@@ -1075,7 +1163,7 @@ function getWithdrawalOrders(priority: AccountType[]): AccountType[][] {
       );
     }
   };
-  permute(priority, []);
+  permute(cashFirstPriority, []);
   return orders;
 }
 
@@ -1097,11 +1185,12 @@ function evaluateWithdrawals(
   balancesBeforeWithdrawals: AccountBalances,
   withdrawalOrder: WithdrawalSource[],
   requestedAmount: number,
+  initialRealizedCapitalGains: number,
 ): WithdrawalEvaluation {
   const balances = cloneAccountBalances(balancesBeforeWithdrawals);
   const withdrawals = createZeroWithdrawals();
   let remaining = requestedAmount;
-  let realizedCapitalGains = 0;
+  let realizedCapitalGains = initialRealizedCapitalGains;
 
   for (const source of withdrawalOrder) {
     const result = withdrawFromSource(
@@ -1109,7 +1198,6 @@ function evaluateWithdrawals(
       remaining,
       balances,
       withdrawals,
-      plan.taxSettings.minimumCashReserve,
     );
     remaining = result.remaining;
     realizedCapitalGains += result.realizedCapitalGain;
@@ -1206,8 +1294,35 @@ function simulateYear(
     CURRENT_UK_TAX_YEAR +
     periodStartAge -
     plan.people.person1.income.currentAge;
+  const mortgageMaturityAge = Math.max(
+    plan.people.person1.income.currentAge,
+    plan.assets.mortgage.mortgageEndAge,
+  );
+  const isMortgageMaturityYear =
+    periodStartAge === mortgageMaturityAge &&
+    plan.mortgageConfiguration.endOfTermTreatment === "repay-from-gia";
+  const mortgageGIARepayment = isMortgageMaturityYear
+    ? Math.min(openingMortgageBalance, balancesAfterGrowth.gia)
+    : 0;
+  const mortgageGIACostBasisSold =
+    balancesAfterGrowth.gia > MONEY_EPSILON
+      ? balancesAfterGrowth.giaCostBasis *
+        (mortgageGIARepayment / balancesAfterGrowth.gia)
+      : 0;
+  const mortgageGIAGain = Math.max(
+    0,
+    mortgageGIARepayment - mortgageGIACostBasisSold,
+  );
+  balancesAfterGrowth.gia = Math.max(
+    0,
+    balancesAfterGrowth.gia - mortgageGIARepayment,
+  );
+  balancesAfterGrowth.giaCostBasis = Math.max(
+    0,
+    balancesAfterGrowth.giaCostBasis - mortgageGIACostBasisSold,
+  );
   const mortgageYear = calculateMortgageYear(
-    openingMortgageBalance,
+    openingMortgageBalance - mortgageGIARepayment,
     plan,
     periodStartAge,
   );
@@ -1227,7 +1342,7 @@ function simulateYear(
     annualIncome,
     growthResult.income,
     zeroWithdrawals,
-    0,
+    mortgageGIAGain,
   );
   const baseTax = combineTaxes(personTaxes);
   const spendingAndMortgage = spending + mortgageYear.payment;
@@ -1235,12 +1350,13 @@ function simulateYear(
     recurringIncome - baseTax.totalTax - spendingAndMortgage;
   let contributionBreakdown = createZeroContributions();
   let withdrawals = zeroWithdrawals;
-  let realizedCapitalGains = 0;
+  let realizedCapitalGains = mortgageGIAGain;
   let tax = baseTax;
   let balances = balancesAfterGrowth;
   let unfundedShortfall = 0;
   let pensionDrawdownIncome = 0;
   let cashNetContribution = 0;
+  let mortgageOverpayment = 0;
 
   if (netCashflowBeforeWithdrawals > 0) {
     const contributionResult = addContributions(
@@ -1250,26 +1366,39 @@ function simulateYear(
       netCashflowBeforeWithdrawals,
       annualIncome,
       growthResult.income,
+      realizedCapitalGains,
+      mortgageYear.balance,
     );
     balances = contributionResult.balances;
     contributionBreakdown = contributionResult.contributions;
+    withdrawals = contributionResult.withdrawals;
+    realizedCapitalGains = contributionResult.realizedCapitalGains;
     personTaxes = contributionResult.personTaxes;
     tax = contributionResult.tax;
     cashNetContribution = contributionResult.cashNetContribution;
     balances.cash += cashNetContribution;
+    mortgageOverpayment = contributionResult.mortgageOverpayment;
+    mortgageYear.balance = Math.max(
+      0,
+      mortgageYear.balance - contributionResult.mortgageOverpayment,
+    );
+    mortgageYear.payment += contributionResult.mortgageOverpayment;
   } else if (netCashflowBeforeWithdrawals < 0) {
     const availableAssets =
-      Math.max(
-        0,
-        balancesAfterGrowth.cash - plan.taxSettings.minimumCashReserve,
-      ) +
+      balancesAfterGrowth.cash +
       balancesAfterGrowth.gia +
       sumPersonValues(balancesAfterGrowth.isa) +
       sumPersonValues(balancesAfterGrowth.pension);
     const requiredNetFunds = spendingAndMortgage;
+    const withdrawalPriority: WithdrawalSource[] = [
+      "cash",
+      ...plan.taxSettings.withdrawalPriority.filter(
+        (account) => account !== "cash",
+      ),
+    ];
     const orders = plan.taxSettings.optimiseTaxAutomatically
       ? getWithdrawalOrders(plan.taxSettings.withdrawalPriority)
-      : [plan.taxSettings.withdrawalPriority];
+      : [withdrawalPriority];
     let bestEvaluation: WithdrawalEvaluation | null = null;
     let bestWithdrawalAmount = Number.POSITIVE_INFINITY;
 
@@ -1283,6 +1412,7 @@ function simulateYear(
         balancesAfterGrowth,
         order,
         high,
+        realizedCapitalGains,
       );
 
       if (evaluation.netFunds >= requiredNetFunds) {
@@ -1297,6 +1427,7 @@ function simulateYear(
             balancesAfterGrowth,
             order,
             midpoint,
+            realizedCapitalGains,
           );
           if (midpointEvaluation.netFunds >= requiredNetFunds) {
             high = midpoint;
@@ -1314,6 +1445,7 @@ function simulateYear(
           balancesAfterGrowth,
           order,
           high,
+          realizedCapitalGains,
         );
         if (evaluation.netFunds < requiredNetFunds - MONEY_EPSILON) {
           high += 0.01;
@@ -1325,6 +1457,7 @@ function simulateYear(
             balancesAfterGrowth,
             order,
             high,
+            realizedCapitalGains,
           );
         }
       }
@@ -1368,7 +1501,14 @@ function simulateYear(
       person2: withdrawals.byPerson.person2.pensionWithdrawal,
     });
     cashNetContribution = -withdrawals.cashWithdrawal;
-    unfundedShortfall = Math.max(0, requiredNetFunds - evaluation.netFunds);
+    unfundedShortfall = Math.max(
+      0,
+      requiredNetFunds - evaluation.netFunds,
+    );
+  }
+
+  if (mortgageGIARepayment > 0) {
+    withdrawals.giaWithdrawal += mortgageGIARepayment;
   }
 
   const totalIncome =
@@ -1431,8 +1571,16 @@ function simulateYear(
     personTaxes,
     spending,
     mortgagePayment: mortgageYear.payment,
+    mortgageOverpayment,
+    mortgageGIARepayment,
     contributions: contributionBreakdown,
     withdrawals,
+    targetIsaContribution:
+      plan.people.person1.assets.isa.monthlyContribution * MONTHS_PER_YEAR +
+      (plan.personalDetails.householdType === "joint"
+        ? plan.people.person2.assets.isa.monthlyContribution *
+          MONTHS_PER_YEAR
+        : 0),
     unfundedShortfall,
     accountNetContributions: {
       isa: contributionBreakdown.isaContribution - withdrawals.isaWithdrawal,

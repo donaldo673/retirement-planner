@@ -42,6 +42,10 @@ export function AccountMovements({
                   lines={[
                     { label: "Opening balance", amount: item.openingBalance },
                     { label: "Mortgage payments", amount: item.payment },
+                    {
+                      label: "GIA repayment at maturity",
+                      amount: item.mortgageGIARepayment ?? null,
+                    },
                     { label: "Closing balance", amount: item.closingBalance },
                     {
                       label: "Liability movement",
@@ -59,7 +63,21 @@ export function AccountMovements({
                 <StatementLines
                   lines={[
                     { label: "Opening", amount: item.openingBalance },
-                    { label: "Contributions", amount: item.contributions },
+                    {
+                      label:
+                        item.account === "isa"
+                          ? "Actual contribution"
+                          : "Contributions",
+                      amount: item.contributions,
+                    },
+                    ...(item.account === "isa"
+                      ? [
+                          {
+                            label: "Target contribution",
+                            amount: item.targetContribution ?? null,
+                          },
+                        ]
+                      : []),
                     {
                       label: "Withdrawals",
                       amount:

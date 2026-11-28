@@ -31,13 +31,21 @@ onward.
 - GIA capital growth is untaxed until withdrawal. Realized gains use the
   supplied cost basis proportionally and the annual CGT exemption and rates.
   GIA/cash interest, dividends, and realized gains are attributed to Person 1.
-- When automatic optimisation is enabled, surplus accumulation cashflow follows
-  the configured account priority, subject to a £20,000 annual ISA allowance,
-  pension limits, and the minimum cash reserve. During a spending deficit, the
-  projection compares all 24 withdrawal orders and chooses the least gross
-  withdrawal that covers the need, then the lowest-tax result.
-- Configured mortgage monthly and annual overpayments are included in cashflow
-  and reduce the projected mortgage balance and future interest.
+- Surplus first tops up the cash reserve, then funds the target ISA contribution
+  from available surplus cash and, when affordable after Capital Gains Tax,
+  GIA assets. Actual contributions are capped by the target and the £20,000
+  annual ISA allowance. The target is reported separately from the achieved
+  contribution.
+- Cash is the first source used to cover a spending deficit and may be drawn
+  down to zero; any remaining shortfall is handled by the configured withdrawal
+  order. Automatic optimisation compares account orders after cash is fixed
+  first.
+- The annual mortgage overpayment target is paid only from surplus remaining
+  after spending, standard mortgage payments, reserve funding, and the target
+  ISA contribution. Mortgage maturity either carries the remaining balance
+  forward at the assumed future rate or repays as much as available GIA assets
+  allow, rolling over any remainder. GIA-funded repayments reduce GIA assets
+  and may realize taxable gains.
 - Thresholds remain fixed through 2027/28 and are indexed from 2028/29 using
   the plan's general inflation assumption. Rates are not inflation-adjusted.
 

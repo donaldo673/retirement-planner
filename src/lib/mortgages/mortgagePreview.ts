@@ -44,21 +44,12 @@ export function estimateMortgagePayoffAge(
         ? configuration.currentFixedRate
         : getAssumedFutureMortgageRate(mortgage, configuration);
     const interest = balance * (annualRate / 12);
-    const plannedPayment =
-      mortgage.monthlyPayment +
-      (includeOverpayments ? configuration.monthlyOverpayment : 0);
+    const plannedPayment = mortgage.monthlyPayment;
     const payment = Math.min(balance + interest, plannedPayment);
     balance += interest - payment;
 
-    if (
-      includeOverpayments &&
-      (month + 1) % 12 === 0 &&
-      configuration.annualLumpSumOverpayment > 0
-    ) {
-      balance = Math.max(
-        0,
-        balance - configuration.annualLumpSumOverpayment,
-      );
+    if (includeOverpayments && (month + 1) % 12 === 0) {
+      balance = Math.max(0, balance - configuration.annualMortgageOverpaymentTarget);
     }
 
     if (balance <= 0.01) {
