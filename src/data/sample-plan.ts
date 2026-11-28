@@ -60,7 +60,6 @@ export function createSampleRetirementPlan(): RetirementPlan {
           employment: {
             currentSalary: 65_000,
             annualSalaryGrowthRate: 0.03,
-            workUntilAge: 67,
           },
           secondEmployment: {
             currentSalary: 0,
@@ -88,7 +87,6 @@ export function createSampleRetirementPlan(): RetirementPlan {
           employment: {
             currentSalary: 0,
             annualSalaryGrowthRate: 0,
-            workUntilAge: 67,
           },
           secondEmployment: {
             currentSalary: 0,

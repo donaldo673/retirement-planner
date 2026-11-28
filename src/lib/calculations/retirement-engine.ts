@@ -95,13 +95,12 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
     const { income: personIncome, assets: personAssets } = person;
     assertAge(`${personKey} current age`, personIncome.currentAge);
     assertAge(`${personKey} State Pension age`, personIncome.statePensionAge);
-    assertAge(`${personKey} work-until age`, personIncome.employment.workUntilAge);
     assertAge(
-      `${personKey} second employment start age`,
+      `${personKey} second / post retirement employment start age`,
       personIncome.secondEmployment.startAge,
     );
     assertAge(
-      `${personKey} second employment end age`,
+      `${personKey} second / post retirement employment end age`,
       personIncome.secondEmployment.endAge,
     );
     assertFiniteNonNegative(`${personKey} ISA value`, personAssets.isa.currentValue);
@@ -122,7 +121,7 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
       personIncome.employment.currentSalary,
     );
     assertFiniteNonNegative(
-      `${personKey} second employment salary`,
+      `${personKey} second / post retirement employment salary`,
       personIncome.secondEmployment.currentSalary,
     );
     assertFiniteNonNegative(
@@ -142,7 +141,7 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
       personIncome.employment.annualSalaryGrowthRate,
     );
     assertAnnualRate(
-      `${personKey} second employment salary growth rate`,
+      `${personKey} second / post retirement employment salary growth rate`,
       personIncome.secondEmployment.annualSalaryGrowthRate,
     );
     if (
@@ -150,7 +149,7 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
       personIncome.secondEmployment.endAge
     ) {
       throw new RangeError(
-        `${personKey} second employment start age must not exceed its end age.`,
+        `${personKey} second / post retirement employment start age must not exceed its end age.`,
       );
     }
   }
@@ -171,14 +170,6 @@ export function validateRetirementPlan(plan: RetirementPlan): void {
   ) {
     throw new RangeError(
       "A valid plan requires current age < retirement age < life expectancy.",
-    );
-  }
-
-  if (
-    people.person1.income.employment.workUntilAge > personalDetails.lifeExpectancy
-  ) {
-    throw new RangeError(
-      "Person 1 work-until age must not exceed life expectancy.",
     );
   }
 
@@ -301,7 +292,7 @@ function calculatePersonAnnualIncome(
   const inflationFactor =
     (1 + plan.assumptions.inflationRate) ** yearsFromToday;
   const salary =
-    age < income.employment.workUntilAge
+    age < plan.personalDetails.retirementAge
       ? income.employment.currentSalary *
         (1 + income.employment.annualSalaryGrowthRate) ** yearsFromToday
       : 0;

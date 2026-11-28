@@ -103,7 +103,6 @@ export interface Assets {
 export interface EmploymentIncome {
   currentSalary: number;
   annualSalaryGrowthRate: number;
-  workUntilAge: number;
 }
 
 export interface SecondEmploymentIncome {

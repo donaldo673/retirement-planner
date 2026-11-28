@@ -524,17 +524,6 @@ export function RetirementPlanForm({
                   label="Annual salary growth"
                   name={`people.${activePerson}.income.employment.annualSalaryGrowthRate`}
                 />
-                <NumberField
-                  error={
-                    personIncomeErrors?.employment?.workUntilAge?.message
-                  }
-                  label="Work until age"
-                  max={120}
-                  min={0}
-                  name={`people.${activePerson}.income.employment.workUntilAge`}
-                  step={1}
-                  suffix="years"
-                />
               </div>
             </section>
             <section aria-labelledby={`${activePerson}-second-employment`}>
@@ -542,7 +531,7 @@ export function RetirementPlanForm({
                 className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100"
                 id={`${activePerson}-second-employment`}
               >
-                Second employment
+                Second / Post Retirement Employment
               </h3>
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <NumberField

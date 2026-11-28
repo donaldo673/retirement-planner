@@ -31,7 +31,7 @@ export function ProfitLossStatement({
           lines={[
             { label: "Employment income", amount: statement.income.employmentIncome },
             {
-              label: "Second employment income",
+              label: "Second / post retirement employment income",
               amount: statement.income.secondEmploymentIncome,
             },
             { label: "Rental income", amount: statement.income.rentalIncome },

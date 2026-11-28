@@ -101,7 +101,6 @@ const personIncomeSchema = z.object({
   employment: z.object({
     currentSalary: moneySchema,
     annualSalaryGrowthRate: rateSchema,
-    workUntilAge: ageSchema,
   }),
   secondEmployment: z.object({
     currentSalary: moneySchema,
@@ -217,14 +216,6 @@ const retirementPlanObjectSchema = z
     }
 
     for (const [index, person] of people.entries()) {
-      if (person.income.employment.workUntilAge < person.income.currentAge) {
-        context.addIssue({
-          code: "custom",
-          path: ["people", index === 0 ? "person1" : "person2", "income", "employment", "workUntilAge"],
-          message: "Work-until age must be at or after current age.",
-        });
-      }
-
       if (
         person.income.secondEmployment.startAge >
         person.income.secondEmployment.endAge
@@ -238,7 +229,8 @@ const retirementPlanObjectSchema = z
             "secondEmployment",
             "endAge",
           ],
-          message: "Second job end age must be at or after its start age.",
+          message:
+            "Second / post retirement employment end age must be at or after its start age.",
         });
       }
     }

@@ -27,6 +27,56 @@ test("projection includes an opening snapshot and all ages through life expectan
   );
 });
 
+test("employment income ends at retirement age while post-retirement income continues", () => {
+  const plan = createSampleRetirementPlan();
+  plan.personalDetails = {
+    retirementAge: 65,
+    lifeExpectancy: 67,
+    householdType: "single",
+  };
+  plan.people.person1.income.currentAge = 64;
+  plan.people.person1.income.employment = {
+    currentSalary: 50_000,
+    annualSalaryGrowthRate: 0,
+  };
+  plan.people.person1.income.secondEmployment = {
+    currentSalary: 10_000,
+    annualSalaryGrowthRate: 0,
+    startAge: 65,
+    endAge: 67,
+  };
+  plan.people.person1.assets.isa = { currentValue: 0, monthlyContribution: 0 };
+  plan.people.person1.assets.pension = {
+    currentValue: 0,
+    monthlyContribution: 0,
+  };
+  plan.assets.gia = { currentValue: 0, costBasis: 0, monthlyContribution: 0 };
+  plan.assets.cash.currentValue = 0;
+  plan.assets.otherAssets.currentValue = 0;
+  plan.assets.mortgage = {
+    outstandingBalance: 0,
+    interestRate: 0,
+    monthlyPayment: 0,
+    mortgageEndAge: 67,
+  };
+  plan.spending.buckets = [];
+  plan.assumptions = {
+    isaRealReturn: 0,
+    pensionRealReturn: 0,
+    giaInterestRealYield: 0,
+    giaDividendRealYield: 0,
+    giaCapitalGrowthRealYield: 0,
+    cashInterestRealYield: 0,
+    inflationRate: 0,
+  };
+
+  const projection = calculateProjection(plan);
+
+  assert.equal(projection.yearlyResults[1].salaryIncome, 50_000);
+  assert.equal(projection.yearlyResults[2].salaryIncome, 0);
+  assert.equal(projection.yearlyResults[2].secondSalaryIncome, 10_000);
+});
+
 test("projection reports account-level contributions and investment income", () => {
   const plan = createSampleRetirementPlan();
   plan.personalDetails = {
@@ -39,7 +89,6 @@ test("projection reports account-level contributions and investment income", () 
   plan.people.person1.income.employment = {
     currentSalary: 30_000,
     annualSalaryGrowthRate: 0,
-    workUntilAge: 66,
   };
   plan.people.person1.income.secondEmployment = {
     currentSalary: 0,
@@ -120,7 +169,6 @@ test("deficits use the configured withdrawal order and report any shortfall", ()
   plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
-    workUntilAge: 65,
   };
   plan.people.person1.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
   plan.people.person1.income.statePension = { annualAmount: 0 };
@@ -180,7 +228,6 @@ test("mortgage maturity clears the remaining balance and charges the payoff", ()
   plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
-    workUntilAge: 65,
   };
   plan.people.person1.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
   plan.people.person1.income.statePension = { annualAmount: 0 };
@@ -215,7 +262,6 @@ test("configured mortgage overpayments reduce future interest and balance", () =
   plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
-    workUntilAge: 40,
   };
   plan.people.person1.income.statePension.annualAmount = 0;
   plan.people.person1.assets.isa = { currentValue: 0, monthlyContribution: 0 };
@@ -286,7 +332,6 @@ test("non-salary income is uprated with inflation from the current age", () => {
   plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
-    workUntilAge: 65,
   };
   plan.people.person1.income.otherIncome = {
     rentalIncome: 100,
@@ -335,7 +380,6 @@ test("final estate below £50,000 is amber; exactly £50,000 is green", () => {
   plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
-    workUntilAge: 65,
   };
   plan.people.person1.income.otherIncome = { rentalIncome: 0, otherIncome: 0 };
   plan.people.person1.income.statePension = { annualAmount: 0 };
@@ -362,7 +406,7 @@ test("invalid age ordering is rejected", () => {
   assert.throws(() => calculateProjection(plan), /current age < retirement age/);
 });
 
-test("second employment and generated investment income flow through tax", () => {
+test("second / post retirement employment and generated investment income flow through tax", () => {
   const plan = createSampleRetirementPlan();
   plan.personalDetails = {
     retirementAge: 41,
@@ -389,7 +433,6 @@ test("second employment and generated investment income flow through tax", () =>
   plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
-    workUntilAge: 40,
   };
   plan.people.person1.income.secondEmployment = {
     currentSalary: 20_000,
@@ -451,7 +494,6 @@ test("pension withdrawals gross up to cover spending after income tax", () => {
   plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
-    workUntilAge: 65,
   };
   plan.people.person1.income.secondEmployment = {
     currentSalary: 0,
@@ -516,7 +558,6 @@ test("selling GIA investments realizes proportional gains and includes CGT", () 
   plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
-    workUntilAge: 65,
   };
   plan.people.person1.income.secondEmployment = {
     currentSalary: 0,
@@ -584,7 +625,6 @@ test("negative real cash yields are accepted and reduce projected cash", () => {
   plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
-    workUntilAge: 65,
   };
   plan.people.person1.income.secondEmployment = {
     currentSalary: 0,
@@ -622,12 +662,10 @@ test("joint households calculate tax separately and advance each person's age", 
   plan.people.person1.income.currentAge = 40;
   plan.people.person1.income.statePensionAge = 120;
   plan.people.person1.income.employment.currentSalary = 20_000;
-  plan.people.person1.income.employment.workUntilAge = 41;
   plan.taxSettings.optimiseTaxAutomatically = false;
   plan.people.person2.income.currentAge = 38;
   plan.people.person2.income.statePensionAge = 120;
   plan.people.person2.income.employment.currentSalary = 30_000;
-  plan.people.person2.income.employment.workUntilAge = 39;
   plan.people.person1.assets.isa = { currentValue: 10_000, monthlyContribution: 0 };
   plan.people.person2.assets.isa = { currentValue: 20_000, monthlyContribution: 0 };
   plan.people.person1.assets.pension = { currentValue: 0, monthlyContribution: 0 };
@@ -681,12 +719,10 @@ test("joint pension withdrawals are allocated proportionally and taxed per perso
   plan.people.person1.income.currentAge = 40;
   plan.people.person1.income.statePensionAge = 120;
   plan.people.person1.income.employment.currentSalary = 0;
-  plan.people.person1.income.employment.workUntilAge = 40;
   plan.people.person1.income.statePension.annualAmount = 0;
   plan.people.person2.income.currentAge = 38;
   plan.people.person2.income.statePensionAge = 120;
   plan.people.person2.income.employment.currentSalary = 0;
-  plan.people.person2.income.employment.workUntilAge = 38;
   plan.people.person2.income.statePension.annualAmount = 0;
   plan.people.person1.assets.isa = { currentValue: 0, monthlyContribution: 0 };
   plan.people.person2.assets.isa = { currentValue: 0, monthlyContribution: 0 };
@@ -754,7 +790,6 @@ test("automatic accumulation uses pension tax relief and account priority", () =
   plan.people.person1.income.employment = {
     currentSalary: 30_000,
     annualSalaryGrowthRate: 0,
-    workUntilAge: 66,
   };
   plan.people.person1.income.secondEmployment = {
     currentSalary: 0,
@@ -813,7 +848,6 @@ test("withdrawals preserve the minimum cash reserve before using other accounts"
   plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
-    workUntilAge: 45,
   };
   plan.people.person1.income.statePension.annualAmount = 0;
   plan.people.person1.assets.isa = { currentValue: 0, monthlyContribution: 0 };
@@ -877,7 +911,6 @@ test("automatic withdrawal selection avoids unnecessary taxable GIA gains", () =
   plan.people.person1.income.employment = {
     currentSalary: 0,
     annualSalaryGrowthRate: 0,
-    workUntilAge: 45,
   };
   plan.people.person1.income.statePension.annualAmount = 0;
   plan.people.person1.assets.isa = {
